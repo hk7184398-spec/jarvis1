@@ -8,4 +8,3 @@ print("Installing Playwright browsers...")
 subprocess.run([sys.executable, "-m", "playwright", "install"], check=True)
 
 print("\n✅ Setup complete! Run 'python main.py' to start MARK XXV.")
-

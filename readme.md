@@ -1,4 +1,4 @@
-# 🤖 MARK XXXIX (39)
+# 🤖 MARK XXXIX-OR (39)
 ### The Ultimate Cross-Platform Personal AI Assistant — By FatihMakes
 
 > 📺 **[Watch the full setup video on YouTube](https://www.youtube.com/watch?v=BhOsnGC_sAA)**
@@ -9,7 +9,7 @@ A real-time voice AI that can hear, see, understand, and control your computer �
 
 ## ✨ Overview
 
-MARK XXXIX represents the pinnacle of the Jarvis series, evolving into a more flexible and robust system. It bridges the gap between the operating system and human intent. Through natural dialogue, Mark 39 analyzes your screen, processes uploaded documents, and executes complex workflows with a brand-new, adaptive interface.
+MARK XXXIX-OR represents the pinnacle of the Jarvis series, evolving into a more flexible and robust system. It bridges the gap between the operating system and human intent. Through natural dialogue, Mark 39 analyzes your screen, processes uploaded documents, and executes complex workflows with a brand-new, adaptive interface.
 
 It's not just an assistant — it's an extension of your digital life.
 
@@ -29,7 +29,7 @@ It's not just an assistant — it's an extension of your digital life.
 
 ---
 
-## 🆕 What's New in XXXIX
+## 🆕 What's New in XXXIX-OR
 
 - 📂 **Advanced File Handling** — New support for direct file uploads. Drop PDFs, source code, or images into the assistant to have them analyzed, summarized, or edited instantly.
 - 🎨 **Adaptive & Flexible UI** — A complete overhaul of the interface. The new UI is fully resizable and responsive, featuring transparency controls and customizable layouts to fit your workspace perfectly.
@@ -42,8 +42,8 @@ It's not just an assistant — it's an extension of your digital life.
 ## ⚡ Quick Start
 
 ```bash
-git clone https://github.com/FatihMakes/Mark-XXXIX.git
-cd Mark-XXXIX
+git clone https://github.com/FatihMakes/Mark-XXXIX-OR.git
+cd Mark-XXXIX-OR
 pip install -r requirements.txt
 playwright install
 python main.py

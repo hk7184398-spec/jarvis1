@@ -76,5 +76,4 @@ Engineered by a developer building a real-world JARVIS-style assistant.
 
 | Platform | Link |
 |---|---|
-| YouTube | [@FatihMakes](https://www.youtube.com/@FatihMakes) |
-| Instagram | [@fatihmakes](https://www.instagram.com/fatihmakes) |
+

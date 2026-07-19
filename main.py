@@ -6,7 +6,7 @@ import traceback
 from pathlib import Path
 
 import sounddevice as sd
-from google import genai
+import google.genai as genai
 from google.genai import types
 from ui import JarvisUI
 from memory.memory_manager import (

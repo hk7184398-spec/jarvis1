@@ -50,8 +50,15 @@ Return ONLY valid JSON:
 
 
 def _get_api_key() -> str:
-    with open(API_CONFIG_PATH, "r", encoding="utf-8") as f:
-        return json.load(f)["gemini_api_key"]
+    try:
+        with open(API_CONFIG_PATH, "r", encoding="utf-8") as f:
+            return json.load(f)["gemini_api_key"]
+    except FileNotFoundError as e:
+        raise RuntimeError(f"API key file not found: {API_CONFIG_PATH}") from e
+    except json.JSONDecodeError as e:
+        raise RuntimeError(f"{API_CONFIG_PATH} is not valid JSON: {e}") from e
+    except KeyError as e:
+        raise RuntimeError(f"'gemini_api_key' missing from {API_CONFIG_PATH}") from e
 
 
 def analyze_error(

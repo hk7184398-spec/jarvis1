@@ -178,6 +178,19 @@ def minimize_window():
     if _OS == "Darwin": pyautogui.hotkey("command", "m")
     else:               pyautogui.hotkey("win", "down")
 
+def _wmctrl(args: list[str]) -> None:
+    """Runs wmctrl, raising when it is missing or reports a failure."""
+    try:
+        result = subprocess.run(["wmctrl", *args], capture_output=True, text=True)
+    except FileNotFoundError as e:
+        raise RuntimeError("wmctrl is not installed") from e
+    if result.returncode != 0:
+        raise RuntimeError(
+            f"wmctrl {' '.join(args)} exited {result.returncode}: "
+            f"{(result.stderr or result.stdout).strip()[:200]}"
+        )
+
+
 def maximize_window():
     if _OS == "Darwin":
         subprocess.run(["osascript", "-e",
@@ -188,9 +201,9 @@ def maximize_window():
         pyautogui.hotkey("win", "up")
     else:
         try:
-            subprocess.run(["wmctrl", "-r", ":ACTIVE:", "-b", "add,maximized_vert,maximized_horz"],
-                capture_output=True)
-        except Exception:
+            _wmctrl(["-r", ":ACTIVE:", "-b", "add,maximized_vert,maximized_horz"])
+        except RuntimeError as e:
+            print(f"[Settings] ⚠️ {e} — falling back to keyboard shortcut")
             pyautogui.hotkey("super", "up")
 
 def snap_left():
@@ -198,20 +211,20 @@ def snap_left():
         pyautogui.hotkey("win", "left")
     elif _OS == "Linux":
         try:
-            subprocess.run(["wmctrl", "-r", ":ACTIVE:", "-e", "0,0,0,960,1080"],
-                capture_output=True)
-        except Exception:
-            pass
+            _wmctrl(["-r", ":ACTIVE:", "-e", "0,0,0,960,1080"])
+        except RuntimeError as e:
+            print(f"[Settings] ⚠️ {e} — falling back to keyboard shortcut")
+            pyautogui.hotkey("super", "left")
 
 def snap_right():
     if _OS == "Windows":
         pyautogui.hotkey("win", "right")
     elif _OS == "Linux":
         try:
-            subprocess.run(["wmctrl", "-r", ":ACTIVE:", "-e", "0,960,0,960,1080"],
-                capture_output=True)
-        except Exception:
-            pass
+            _wmctrl(["-r", ":ACTIVE:", "-e", "0,960,0,960,1080"])
+        except RuntimeError as e:
+            print(f"[Settings] ⚠️ {e} — falling back to keyboard shortcut")
+            pyautogui.hotkey("super", "right")
 
 def switch_window():
     if _OS == "Darwin": pyautogui.hotkey("command", "tab")

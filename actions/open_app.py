@@ -75,8 +75,8 @@ def _is_running(app_name: str) -> bool:
                     return True
             except (psutil.NoSuchProcess, psutil.AccessDenied):
                 continue
-    except Exception:
-        pass
+    except Exception as e:
+        print(f"[OpenApp] ⚠️ Could not inspect running processes: {e}")
     return False
 
 
@@ -96,21 +96,18 @@ def _launch_windows(app_name: str) -> bool:
         return False
 
 def _launch_macos(app_name: str) -> bool:
-    try:
-        result = subprocess.run(["open", "-a", app_name], capture_output=True, timeout=8)
-        if result.returncode == 0:
-            time.sleep(1.0)
-            return True
-    except Exception:
-        pass
-
-    try:
-        result = subprocess.run(["open", "-a", f"{app_name}.app"], capture_output=True, timeout=8)
-        if result.returncode == 0:
-            time.sleep(1.0)
-            return True
-    except Exception:
-        pass
+    for target in (app_name, f"{app_name}.app"):
+        try:
+            result = subprocess.run(["open", "-a", target], capture_output=True, timeout=8)
+            if result.returncode == 0:
+                time.sleep(1.0)
+                return True
+            print(
+                f"[open_app] ⚠️ 'open -a {target}' exited {result.returncode}: "
+                f"{result.stderr.decode(errors='replace').strip()[:200]}"
+            )
+        except Exception as e:
+            print(f"[open_app] ⚠️ 'open -a {target}' failed: {e}")
 
     try:
         import pyautogui
@@ -138,21 +135,21 @@ def _launch_linux(app_name: str) -> bool:
             subprocess.Popen([binary], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
             time.sleep(1.0)
             return True
-        except Exception:
-            pass
+        except OSError as e:
+            print(f"[open_app] ⚠️ Could not start '{binary}': {e}")
 
-    try:
-        subprocess.run(["xdg-open", app_name], capture_output=True, timeout=5)
-        return True
-    except Exception:
-        pass
-
-    try:
-        desktop_name = app_name.lower().replace(" ", "-")
-        subprocess.run(["gtk-launch", desktop_name], capture_output=True, timeout=5)
-        return True
-    except Exception:
-        pass
+    desktop_name = app_name.lower().replace(" ", "-")
+    for command in (["xdg-open", app_name], ["gtk-launch", desktop_name]):
+        try:
+            result = subprocess.run(command, capture_output=True, timeout=5)
+            if result.returncode == 0:
+                return True
+            print(
+                f"[open_app] ⚠️ '{' '.join(command)}' exited {result.returncode}: "
+                f"{result.stderr.decode(errors='replace').strip()[:200]}"
+            )
+        except Exception as e:
+            print(f"[open_app] ⚠️ '{' '.join(command)}' failed: {e}")
 
     return False
 

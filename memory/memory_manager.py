@@ -1,19 +1,10 @@
 import json
-import re
 from datetime import datetime
 from threading import Lock
-from pathlib import Path
-import sys
 
+from core.paths import MEMORY_PATH
+from core.text import parse_json_response
 
-def get_base_dir() -> Path:
-    if getattr(sys, "frozen", False):
-        return Path(sys.executable).parent
-    return Path(__file__).resolve().parent.parent
-
-
-BASE_DIR         = get_base_dir()
-MEMORY_PATH      = BASE_DIR / "memory" / "long_term.json"
 _lock            = Lock()
 MAX_VALUE_LENGTH = 380
 MEMORY_MAX_CHARS = 2200
@@ -202,13 +193,10 @@ def extract_memory(user_text: str, jarvis_text: str, api_key: str = "") -> dict:
             temperature=0.2,
         )
 
-        clean = raw.strip()
-        clean = re.sub(r"```(?:json)?", "", clean).strip().rstrip("`").strip()
-
-        if not clean or clean == "{}":
+        if not raw.strip():
             return {}
 
-        return json.loads(clean)
+        return parse_json_response(raw) or {}
 
     except json.JSONDecodeError:
         return {}

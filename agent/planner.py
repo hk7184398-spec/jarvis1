@@ -1,17 +1,7 @@
 import json
-import re
-import sys
-from pathlib import Path
 
-
-def get_base_dir() -> Path:
-    if getattr(sys, "frozen", False):
-        return Path(sys.executable).parent
-    return Path(__file__).resolve().parent.parent
-
-
-BASE_DIR        = get_base_dir()
-API_CONFIG_PATH = BASE_DIR / "config" / "api_keys.json"
+from core.gemini import get_generative_model
+from core.text import parse_json_response
 
 
 PLANNER_PROMPT = """You are the planning module of MARK XXV, a personal AI assistant.
@@ -172,18 +162,10 @@ OUTPUT — return ONLY valid JSON, no markdown, no explanation, no code blocks:
 """
 
 
-def _get_api_key() -> str:
-    with open(API_CONFIG_PATH, "r", encoding="utf-8") as f:
-        return json.load(f)["gemini_api_key"]
-
-
 def create_plan(goal: str, context: str = "") -> dict:
-    import google.generativeai as genai
-
-    genai.configure(api_key=_get_api_key())
-    model = genai.GenerativeModel(
-        model_name="gemini-2.5-flash-lite",
-        system_instruction=PLANNER_PROMPT
+    model = get_generative_model(
+        "gemini-2.5-flash-lite",
+        system_instruction=PLANNER_PROMPT,
     )
 
     user_input = f"Goal: {goal}"
@@ -192,10 +174,7 @@ def create_plan(goal: str, context: str = "") -> dict:
 
     try:
         response = model.generate_content(user_input)
-        text     = response.text.strip()
-        text     = re.sub(r"```(?:json)?", "", text).strip().rstrip("`").strip()
-
-        plan = json.loads(text)
+        plan     = parse_json_response(response.text)
 
         if "steps" not in plan or not isinstance(plan["steps"], list):
             raise ValueError("Invalid plan structure")
@@ -238,12 +217,9 @@ def _fallback_plan(goal: str) -> dict:
 
 
 def replan(goal: str, completed_steps: list, failed_step: dict, error: str) -> dict:
-    import google.generativeai as genai
-
-    genai.configure(api_key=_get_api_key())
-    model = genai.GenerativeModel(
-        model_name="gemini-2.5-flash",
-        system_instruction=PLANNER_PROMPT
+    model = get_generative_model(
+        "gemini-2.5-flash",
+        system_instruction=PLANNER_PROMPT,
     )
 
     completed_summary = "\n".join(
@@ -262,9 +238,7 @@ Create a REVISED plan for the remaining work only. Do not repeat completed steps
 
     try:
         response = model.generate_content(prompt)
-        text     = response.text.strip()
-        text     = re.sub(r"```(?:json)?", "", text).strip().rstrip("`").strip()
-        plan     = json.loads(text)
+        plan     = parse_json_response(response.text)
 
         for step in plan.get("steps", []):
             if step.get("tool") == "generated_code":

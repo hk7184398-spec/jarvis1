@@ -6,9 +6,7 @@ from pathlib import Path
 from datetime import datetime
 import send2trash
 
-def _get_desktop() -> Path:
-    """Returns desktop path — works on Windows, Mac, Linux."""
-    return Path.home() / "Desktop"
+from core.platform_utils import get_desktop_dir as _get_desktop
 
 
 def _get_downloads() -> Path:
@@ -21,7 +19,7 @@ def _resolve_path(raw: str) -> Path:
     Supports shortcuts: 'desktop', 'downloads', 'documents', 'home'
     """
     shortcuts = {
-        "desktop":   Path.home() / "Desktop",
+        "desktop":   _get_desktop(),
         "downloads": Path.home() / "Downloads",
         "documents": Path.home() / "Documents",
         "pictures":  Path.home() / "Pictures",

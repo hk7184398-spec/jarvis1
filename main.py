@@ -1,13 +1,12 @@
 import asyncio
 import threading
-import json
-import sys
 import traceback
-from pathlib import Path
 
 import sounddevice as sd
-import google.genai as genai
 from google.genai import types
+from core.config import get_gemini_key
+from core.gemini import get_genai_client
+from core.paths import PROMPT_PATH
 from ui import JarvisUI
 from memory.memory_manager import (
     load_memory, update_memory, format_memory_for_prompt,
@@ -33,25 +32,11 @@ from actions.computer_control  import computer_control
 from actions.game_updater      import game_updater
 
 
-def get_base_dir():
-    if getattr(sys, "frozen", False):
-        return Path(sys.executable).parent
-    return Path(__file__).resolve().parent
-
-
-BASE_DIR        = get_base_dir()
-API_CONFIG_PATH = BASE_DIR / "config" / "api_keys.json"
-PROMPT_PATH     = BASE_DIR / "core" / "prompt.txt"
 LIVE_MODEL          = "models/gemini-2.5-flash-native-audio-preview-12-2025"
 CHANNELS            = 1
 SEND_SAMPLE_RATE    = 16000
 RECEIVE_SAMPLE_RATE = 24000
 CHUNK_SIZE          = 1024
-
-
-def _get_api_key() -> str:
-    with open(API_CONFIG_PATH, "r", encoding="utf-8") as f:
-        return json.load(f)["gemini_api_key"]
 
 
 def _load_system_prompt() -> str:
@@ -77,7 +62,7 @@ def _update_memory_async(user_text: str, jarvis_text: str) -> None:
     _last_memory_input = user_text
 
     try:
-        api_key = _get_api_key()
+        api_key = get_gemini_key()
         if not should_extract_memory(user_text, jarvis_text, api_key):
             return
         data = extract_memory(user_text, jarvis_text, api_key)
@@ -830,10 +815,7 @@ class JarvisLive:
             stream.close()
 
     async def run(self):
-        client = genai.Client(
-            api_key=_get_api_key(),
-            http_options={"api_version": "v1beta"}
-        )
+        client = get_genai_client(api_version="v1beta")
 
         while True:
             try:

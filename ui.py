@@ -1,8 +1,6 @@
 from __future__ import annotations
 
-import json
 import math
-import os
 import platform
 import random
 import subprocess
@@ -28,14 +26,7 @@ from PyQt6.QtWidgets import (
     QVBoxLayout, QWidget, QProgressBar,
 )
 
-def _base_dir() -> Path:
-    if getattr(sys, "frozen", False):
-        return Path(sys.executable).parent
-    return Path(__file__).resolve().parent
-
-BASE_DIR   = _base_dir()
-CONFIG_DIR = BASE_DIR / "config"
-API_FILE   = CONFIG_DIR / "api_keys.json"
+from core.config import load_config, update_config
 
 _DEFAULT_W, _DEFAULT_H = 980, 700
 _MIN_W,     _MIN_H     = 820, 580
@@ -1439,14 +1430,10 @@ class MainWindow(QMainWindow):
         self.hud.speaking = (state == "SPEAKING")
 
     def _check_config(self) -> bool:
-        if not API_FILE.exists(): return False
-        try:
-            d = json.loads(API_FILE.read_text(encoding="utf-8"))
-            return (bool(d.get("gemini_api_key")) and
-                    bool(d.get("openrouter_api_key")) and
-                    bool(d.get("os_system")))
-        except Exception:
-            return False
+        d = load_config()
+        return (bool(d.get("gemini_api_key")) and
+                bool(d.get("openrouter_api_key")) and
+                bool(d.get("os_system")))
 
     def _show_setup(self):
         ov = SetupOverlay(self.centralWidget())
@@ -1463,14 +1450,10 @@ class MainWindow(QMainWindow):
 
     # Change signature:
     def _on_setup_done(self, key: str, or_key: str, os_name: str):
-        os.makedirs(CONFIG_DIR, exist_ok=True)
-        API_FILE.write_text(
-            json.dumps({
-                "gemini_api_key":    key,
-                "openrouter_api_key": or_key,
-                "os_system":         os_name,
-            }, indent=4),
-            encoding="utf-8",
+        update_config(
+            gemini_api_key=key,
+            openrouter_api_key=or_key,
+            os_system=os_name,
         )
         self._ready = True
         if self._overlay:

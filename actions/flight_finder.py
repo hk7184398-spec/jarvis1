@@ -1,21 +1,8 @@
 #flight_finder.py
-import json
 import re
-import subprocess
-import sys
 from datetime import datetime, timedelta
-from pathlib import Path
 
-from config import is_windows, is_mac, is_linux
-
-def _get_base_dir() -> Path:
-    if getattr(sys, "frozen", False):
-        return Path(sys.executable).parent
-    return Path(__file__).resolve().parent.parent
-
-
-BASE_DIR        = _get_base_dir()
-API_CONFIG_PATH = BASE_DIR / "config" / "api_keys.json"
+from core.platform_utils import save_to_desktop
 
 _MONTH_MAP: dict[str, int] = {
 
@@ -253,22 +240,9 @@ def _format_text_report(
 def _save_to_desktop(content: str, origin: str, destination: str) -> str:
     ts       = datetime.now().strftime("%Y%m%d_%H%M%S")
     filename = f"flights_{origin}_{destination}_{ts}.txt".replace(" ", "_")
-    desktop  = Path.home() / "Desktop"
-    desktop.mkdir(parents=True, exist_ok=True)
-    filepath = desktop / filename
 
-    filepath.write_text(content, encoding="utf-8")
+    filepath = save_to_desktop(filename, content, open_editor=True)
     print(f"[FlightFinder] 💾 Saved: {filepath}")
-
-    try:
-        if is_windows():
-            subprocess.Popen(["notepad.exe", str(filepath)])
-        elif is_mac():
-            subprocess.Popen(["open", "-t", str(filepath)])
-        else:
-            subprocess.Popen(["xdg-open", str(filepath)])
-    except Exception as e:
-        print(f"[FlightFinder] ⚠️ Could not open text editor: {e}")
 
     return str(filepath)
 

@@ -1,5 +1,4 @@
 import json
-import sys
 import time
 import base64
 import logging
@@ -8,30 +7,11 @@ from typing import Optional
 
 import requests
 
+from core.config import get_openrouter_key
+from core.text import parse_json_response
+
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger("openrouter_client")
-
-def _get_base_dir() -> Path:
-    if getattr(sys, "frozen", False):
-        return Path(sys.executable).parent
-    return Path(__file__).resolve().parent
-
-
-BASE_DIR     = _get_base_dir()
-API_KEY_PATH = BASE_DIR / "config" / "api_keys.json"
-
-def _load_api_key() -> str:
-    try:
-        with open(API_KEY_PATH, "r", encoding="utf-8") as f:
-            data = json.load(f)
-        key = data.get("openrouter_api_key", "").strip()
-        if not key:
-            raise ValueError("openrouter_api_key is empty in api_keys.json")
-        return key
-    except FileNotFoundError:
-        raise RuntimeError(f"api_keys.json not found at: {API_KEY_PATH}")
-    except Exception as e:
-        raise RuntimeError(f"Failed to load OpenRouter API key: {e}")
 
 TEXT_MODELS: list[str] = [
     "nvidia/nemotron-3-super-120b-a12b:free",
@@ -82,7 +62,7 @@ _rate_limited: dict[str, float] = {}
 class OpenRouterClient:
 
     def __init__(self) -> None:
-        self.api_key  = _load_api_key()
+        self.api_key  = get_openrouter_key()
         self._headers = {
             "Authorization": f"Bearer {self.api_key}",
             "Content-Type":  "application/json",
@@ -232,16 +212,8 @@ class OpenRouterClient:
             TEXT_MODELS, messages, model, max_tokens, temperature=0.2
         )
 
-        clean = raw.strip()
-        if clean.startswith("```"):
-            parts = clean.split("```")
-            clean = parts[1] if len(parts) > 1 else clean
-            if clean.startswith("json"):
-                clean = clean[4:]
-        clean = clean.strip().rstrip("`").strip()
-
         try:
-            return json.loads(clean)
+            return parse_json_response(raw)
         except json.JSONDecodeError as e:
             logger.error(
                 f"[OpenRouter] JSON parse failed: {e}\n"

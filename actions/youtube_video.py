@@ -1,16 +1,7 @@
 #youtube_video.py
-import json
 import re
-import sys
-import time
-import subprocess
-import shutil
-from pathlib import Path
 from datetime import datetime
 from urllib.parse import quote_plus
-
-import pyautogui
-import numpy as np
 
 try:
     import requests
@@ -24,17 +15,7 @@ try:
 except ImportError:
     _TRANSCRIPT_OK = False
 
-from config import get_os, is_windows, is_mac, is_linux
-
-
-def _get_base_dir() -> Path:
-    if getattr(sys, "frozen", False):
-        return Path(sys.executable).parent
-    return Path(__file__).resolve().parent.parent
-
-
-BASE_DIR        = _get_base_dir()
-API_CONFIG_PATH = BASE_DIR / "config" / "api_keys.json"
+from core.platform_utils import open_url, save_to_desktop
 
 HEADERS = {
     "User-Agent": (
@@ -46,17 +27,6 @@ HEADERS = {
 }
 
 _YT_VIDEO_FILTER = "EgIQAQ%3D%3D"
-
-def _open_url(url: str) -> None:
-    try:
-        if is_mac():
-            subprocess.Popen(["open", url])
-        elif is_linux():
-            subprocess.Popen(["xdg-open", url])
-        else:
-            subprocess.Popen(["cmd", "/c", "start", "", url], shell=False)
-    except Exception as e:
-        print(f"[YouTube] ⚠️ open_url failed: {e}")
 
 def _scrape_first_video_url(query: str) -> str | None:
 
@@ -173,9 +143,6 @@ def _summarize_with_gemini(transcript: str, video_url: str) -> str:
 def _save_summary(content: str, video_url: str) -> str:
     ts       = datetime.now().strftime("%Y%m%d_%H%M%S")
     filename = f"youtube_summary_{ts}.txt"
-    desktop  = Path.home() / "Desktop"
-    desktop.mkdir(parents=True, exist_ok=True)
-    filepath = desktop / filename
 
     header = (
         f"JARVIS — YouTube Summary\n"
@@ -184,17 +151,7 @@ def _save_summary(content: str, video_url: str) -> str:
         f"Date   : {datetime.now().strftime('%Y-%m-%d %H:%M')}\n"
         f"{'─' * 50}\n\n"
     )
-    filepath.write_text(header + content, encoding="utf-8")
-
-    try:
-        if is_windows():
-            subprocess.Popen(["notepad.exe", str(filepath)])
-        elif is_mac():
-            subprocess.Popen(["open", "-t", str(filepath)])
-        else:
-            subprocess.Popen(["xdg-open", str(filepath)])
-    except Exception as e:
-        print(f"[YouTube] ⚠️ Could not open text editor: {e}")
+    filepath = save_to_desktop(filename, header + content, open_editor=True)
 
     return str(filepath)
 
@@ -272,7 +229,7 @@ def _handle_play(parameters: dict, player) -> str:
 
     if video_url:
         print(f"[YouTube] ▶️ Opening: {video_url}")
-        _open_url(video_url)
+        open_url(video_url)
         return f"Playing: {query}"
 
     print(f"[YouTube] ⚠️ Scrape failed, opening filtered search page")
@@ -281,7 +238,7 @@ def _handle_play(parameters: dict, player) -> str:
         f"?search_query={quote_plus(query)}"
         f"&sp={_YT_VIDEO_FILTER}"
     )
-    _open_url(fallback_url)
+    open_url(fallback_url)
     return f"Opened YouTube search for: {query} (manual selection required)"
 
 

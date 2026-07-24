@@ -1,9 +1,11 @@
 # actions/reminder.py
 
+import json
 import subprocess
 import os
 import sys
 from datetime import datetime
+from xml.sax.saxutils import escape as xml_escape
 
 
 def reminder(
@@ -38,7 +40,12 @@ def reminder(
             return "That time is already in the past."
 
         task_name    = f"MARKReminder_{target_dt.strftime('%Y%m%d_%H%M')}"
-        safe_message = message.replace('"', '').replace("'", "").strip()[:200]
+        # Collapse newlines/control chars, then embed as a literal so the message
+        # can never escape the generated script or the task XML.
+        plain_message   = "".join(
+            ch if ch.isprintable() else " " for ch in str(message)
+        ).strip()[:200] or "Reminder"
+        message_literal = json.dumps(plain_message)
 
         python_exe = sys.executable
         if python_exe.lower().endswith("python.exe"):
@@ -67,14 +74,14 @@ try:
     from win10toast import ToastNotifier
     ToastNotifier().show_toast(
         "MARK Reminder",
-        "{safe_message}",
+        {message_literal},
         duration=15,
         threaded=False
     )
 except Exception:
     try:
         import subprocess
-        subprocess.run(["msg", "*", "/TIME:30", "{safe_message}"], shell=True)
+        subprocess.run(["msg", "*", "/TIME:30", {message_literal}])
     except Exception:
         pass
 
@@ -90,7 +97,7 @@ except Exception:
         xml_content = f'''<?xml version="1.0" encoding="UTF-16"?>
 <Task version="1.2" xmlns="http://schemas.microsoft.com/windows/2004/02/mit/task">
   <RegistrationInfo>
-    <Description>MARK Reminder: {safe_message}</Description>
+    <Description>MARK Reminder: {xml_escape(plain_message)}</Description>
   </RegistrationInfo>
   <Triggers>
     <TimeTrigger>
@@ -126,8 +133,8 @@ except Exception:
             f.write(xml_content)
 
         result = subprocess.run(
-            f'schtasks /Create /TN "{task_name}" /XML "{xml_path}" /F',
-            shell=True, capture_output=True, text=True
+            ["schtasks", "/Create", "/TN", task_name, "/XML", xml_path, "/F"],
+            capture_output=True, text=True
         )
 
         try:

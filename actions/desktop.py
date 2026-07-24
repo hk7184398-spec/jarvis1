@@ -1,4 +1,5 @@
 #desktop.py
+import ast
 import os
 import sys
 import json
@@ -38,7 +39,7 @@ def _build_sandbox() -> dict:
         "len": len, "str": str, "int": int, "float": float,
         "bool": bool, "list": list, "dict": dict, "tuple": tuple,
         "range": range, "enumerate": enumerate, "sorted": sorted,
-        "isinstance": isinstance, "hasattr": hasattr, "getattr": getattr,
+        "isinstance": isinstance, "hasattr": hasattr,
         "max": max, "min": min, "sum": sum, "abs": abs,
         "zip": zip, "map": map, "filter": filter,
     }
@@ -75,6 +76,39 @@ def _build_sandbox() -> dict:
     return sandbox
 
 
+_FORBIDDEN_CALLS = {
+    "eval", "exec", "compile", "open", "input", "__import__",
+    "getattr", "setattr", "delattr", "globals", "locals", "vars", "breakpoint",
+}
+
+
+def _validate_generated_code(code: str) -> str | None:
+    """Returns a reason why the code is rejected, or None when it is acceptable.
+
+    A restricted exec namespace is not a boundary on its own: dunder attribute
+    walks such as ``().__class__.__mro__`` reach arbitrary builtins from inside it.
+    """
+    try:
+        tree = ast.parse(code)
+    except SyntaxError as e:
+        return f"syntax error: {e}"
+
+    for node in ast.walk(tree):
+        if isinstance(node, (ast.Import, ast.ImportFrom)):
+            return "import statements are not allowed"
+        if isinstance(node, ast.Attribute) and node.attr.startswith("__"):
+            return f"dunder attribute access is not allowed: {node.attr}"
+        if isinstance(node, ast.Name) and node.id.startswith("__"):
+            return f"dunder name access is not allowed: {node.id}"
+        if isinstance(node, ast.Constant) and isinstance(node.value, str) \
+                and node.value.startswith("__") and node.value.endswith("__"):
+            return "dunder string literals are not allowed"
+        if isinstance(node, ast.Call) and isinstance(node.func, ast.Name) \
+                and node.func.id in _FORBIDDEN_CALLS:
+            return f"call to {node.func.id}() is not allowed"
+    return None
+
+
 def _execute_generated_code(code: str, player=None) -> str:
     if not code or code.strip() == "UNSAFE":
         return "This action cannot be performed safely."
@@ -83,6 +117,11 @@ def _execute_generated_code(code: str, player=None) -> str:
     if code.startswith("```"):
         lines = code.split("\n")
         code  = "\n".join(lines[1:-1]).strip()
+
+    reason = _validate_generated_code(code)
+    if reason:
+        print(f"[Desktop] Blocked generated code ({reason})\nCode:\n{code[:300]}")
+        return "This action cannot be performed safely."
 
     sandbox      = _build_sandbox()
     output_lines = []

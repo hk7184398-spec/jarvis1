@@ -1,4 +1,5 @@
 import json
+import os
 import sys
 from pathlib import Path
 
@@ -38,6 +39,15 @@ def save_api_keys(gemini_api_key: str) -> None:
         json.dumps(data, indent=2),
         encoding="utf-8"
     )
+    restrict_permissions(CONFIG_FILE)
+
+
+def restrict_permissions(path: Path) -> None:
+    """Make the credentials file readable by its owner only (no-op on Windows)."""
+    try:
+        os.chmod(path, 0o600)
+    except OSError:
+        pass
 
 
 def load_api_keys() -> dict:

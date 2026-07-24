@@ -28,6 +28,8 @@ from PyQt6.QtWidgets import (
     QVBoxLayout, QWidget, QProgressBar,
 )
 
+from memory.config_manager import restrict_permissions
+
 def _base_dir() -> Path:
     if getattr(sys, "frozen", False):
         return Path(sys.executable).parent
@@ -1472,6 +1474,7 @@ class MainWindow(QMainWindow):
             }, indent=4),
             encoding="utf-8",
         )
+        restrict_permissions(API_FILE)
         self._ready = True
         if self._overlay:
             self._overlay.hide()

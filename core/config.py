@@ -1,6 +1,6 @@
 import json
 
-from core.files import atomic_write_text, quarantine_corrupt_file
+from core.files import atomic_write_text, quarantine_corrupt_file, restrict_permissions
 from core.paths import API_CONFIG_PATH, CONFIG_DIR
 
 
@@ -34,6 +34,7 @@ def load_config() -> dict:
 def save_config(data: dict) -> None:
     CONFIG_DIR.mkdir(parents=True, exist_ok=True)
     atomic_write_text(API_CONFIG_PATH, json.dumps(data, indent=4))
+    restrict_permissions(API_CONFIG_PATH)
 
 
 def update_config(**values) -> dict:

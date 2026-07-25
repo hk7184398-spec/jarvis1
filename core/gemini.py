@@ -8,7 +8,7 @@ def get_generative_model(model_name: str = DEFAULT_MODEL, **kwargs):
     import google.generativeai as genai
 
     genai.configure(api_key=get_gemini_key())
-    return genai.GenerativeModel(model_name, **kwargs)
+    return genai.GenerativeModel(model_name=model_name, **kwargs)
 
 
 def get_genai_client(api_version: str | None = None):

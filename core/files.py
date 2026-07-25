@@ -3,6 +3,14 @@ from datetime import datetime
 from pathlib import Path
 
 
+def restrict_permissions(path: Path) -> None:
+    """Make a file readable by its owner only (no-op on Windows)."""
+    try:
+        os.chmod(path, 0o600)
+    except OSError:
+        pass
+
+
 def atomic_write_text(path: Path, text: str) -> None:
     """Write via a temp file so a failed write cannot truncate the original."""
     path.parent.mkdir(parents=True, exist_ok=True)

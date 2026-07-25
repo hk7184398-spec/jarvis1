@@ -52,6 +52,19 @@ python main.py
 
 ---
 
+## 🧪 Tests
+
+Unit tests live in `tests/` and run entirely offline — no API keys, no network, no microphone.
+All model, browser and OS calls are stubbed.
+
+```bash
+pip install -r requirements-dev.txt
+pytest                          # run the suite
+pytest --cov --cov-report=term  # with a coverage report
+```
+
+---
+
 ## 📋 Requirements
 
 | Requirement | Details |

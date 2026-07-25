@@ -1,0 +1,10 @@
+[run]
+source = .
+omit =
+    tests/*
+    documents/*
+    setup.py
+
+[report]
+show_missing = True
+skip_empty = True

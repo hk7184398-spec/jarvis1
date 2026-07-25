@@ -29,6 +29,8 @@ from PyQt6.QtWidgets import (
     QVBoxLayout, QWidget, QProgressBar,
 )
 
+from memory.config_manager import restrict_permissions
+
 def _base_dir() -> Path:
     if getattr(sys, "frozen", False):
         return Path(sys.executable).parent
@@ -1499,6 +1501,7 @@ class MainWindow(QMainWindow):
             print(f"[UI] ❌ Could not save {API_FILE}: {e}")
             self._log.append_log(f"ERR: could not save configuration — {e}")
             return
+        restrict_permissions(API_FILE)
 
         self._ready = True
         if self._overlay:

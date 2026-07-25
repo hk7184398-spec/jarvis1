@@ -244,12 +244,22 @@ def _clear_field() -> str:
     pyautogui.press("delete")
     return "Field cleared"
 
+def _ps_literal(value: str) -> str:
+    """Single-quoted PowerShell string literal ('' escapes an embedded quote)."""
+    return "'" + str(value).replace("'", "''") + "'"
+
+
+def _applescript_literal(value: str) -> str:
+    escaped = str(value).replace("\\", "\\\\").replace('"', '\\"')
+    return f'"{escaped}"'
+
+
 def _focus_window(title: str) -> str:
     os_name = _get_os()
 
     if os_name == "windows":
         try:
-            script = f'(New-Object -ComObject WScript.Shell).AppActivate("{title}")'
+            script = f'(New-Object -ComObject WScript.Shell).AppActivate({_ps_literal(title)})'
             subprocess.run(
                 ["powershell", "-NoProfile", "-NonInteractive", "-Command", script],
                 capture_output=True, timeout=5,
@@ -262,7 +272,8 @@ def _focus_window(title: str) -> str:
     if os_name == "mac":
         script = (
             f'tell application "System Events" to '
-            f'set frontmost of (first process whose name contains "{title}") to true'
+            f'set frontmost of (first process whose name contains '
+            f'{_applescript_literal(title)}) to true'
         )
         try:
             subprocess.run(

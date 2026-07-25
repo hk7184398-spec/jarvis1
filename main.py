@@ -32,6 +32,8 @@ from actions.web_search        import web_search as web_search_action
 from actions.computer_control  import computer_control
 from actions.game_updater      import game_updater
 from actions.viral_clipper     import jarvis_tool_cut_viral_clips
+from actions.website_builder   import TOOL_DECLARATIONS as website_builder_tools
+from actions.website_builder   import build_website
 
 
 def get_base_dir():
@@ -517,6 +519,8 @@ TOOL_DECLARATIONS = [
     },
 ]
 
+TOOL_DECLARATIONS.extend(website_builder_tools)
+
 
 class JarvisLive:
 
@@ -733,6 +737,10 @@ class JarvisLive:
                     )
                 )
                 result = r or "Done."
+
+            elif name == "build_website":
+                r = await loop.run_in_executor(None, lambda: build_website(parameters=args, player=self.ui))
+                result = r or "Done."
             elif name == "shutdown_jarvis":
                 self.ui.write_log("SYS: Shutdown requested.")
                 self.speak("Goodbye, sir.")
@@ -919,7 +927,7 @@ class JarvisLive:
             await asyncio.sleep(3)
 
 def main():
-    ui = JarvisUI("face.png")
+    ui = JarvisUI(str(BASE_DIR / "face.png"))
 
     def runner():
         ui.wait_for_api_key()

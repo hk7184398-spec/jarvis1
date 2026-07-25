@@ -20,6 +20,9 @@ RULES:
 - build_website → ANY request to create/build/design a website, landing page, or web app.
   Call DIRECTLY via Lovable — never use dev_agent or code_helper for this, those build
   local code projects, not Lovable-hosted websites.
+- start_screen_recording / stop_screen_recording → ANY request to record the screen or
+  start/stop a screencast. Do NOT confuse with screen_process, which only takes a single
+  screenshot for AI analysis — it does not save a video file.
 - For screen_process: say something curious before calling, then stay completely 
   silent — the vision module speaks directly.
 - Only call shutdown_jarvis if the user clearly intends to end the assistant session.

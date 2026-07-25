@@ -13,7 +13,7 @@ except ImportError:
     _PSUTIL = False
 
 _APP_ALIASES = {
-    "whatsapp":           {"Windows": "WhatsApp",               "Darwin": "WhatsApp",            "Linux": "web.whatsapp.com"},
+    "whatsapp":           {"Windows": "WhatsApp",               "Darwin": "WhatsApp",            "Linux": "https://web.whatsapp.com"},
     "chrome":             {"Windows": "chrome",                 "Darwin": "Google Chrome",       "Linux": "google-chrome"},
     "google chrome":      {"Windows": "chrome",                 "Darwin": "Google Chrome",       "Linux": "google-chrome"},
     "firefox":            {"Windows": "firefox",                "Darwin": "Firefox",             "Linux": "firefox"},

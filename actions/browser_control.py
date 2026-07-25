@@ -14,6 +14,13 @@ def _short_error(error: Exception) -> str:
     return (text[0] if text else type(error).__name__)[:120]
 
 
+def _get_profile_dir() -> Path:
+    """Persistent on-disk profile folder — keeps cookies/logins across JARVIS restarts."""
+    profile_dir = Path.home() / ".jarvis" / "browser_profile"
+    profile_dir.mkdir(parents=True, exist_ok=True)
+    return profile_dir
+
+
 def _get_default_browser_id() -> str:
     """Returns raw default browser identifier string for current OS."""
     system = platform.system()
@@ -196,8 +203,10 @@ class _BrowserThread:
         """
         Tarayıcıyı başlatır. Zaten açıksa hiçbir şey yapmaz.
         Her zaman default tarayıcıyı kullanır, özel sekme açmaz.
+        Persistent profile kullanır — cookies/login her seferinde kalıcı olsun diye
+        (aksi halde her açılışta incognito gibi sıfırdan başlar).
         """
-        if self._browser and self._browser.is_connected():
+        if self._context is not None:
             return
 
         prog_id = _get_default_browser_id()
@@ -216,7 +225,18 @@ class _BrowserThread:
             ]
             print("[Browser] 🎭 Opera detected — disabling private-mode flags")
 
-        launch_kwargs = {"headless": False}
+        profile_dir = str(_get_profile_dir())
+
+        launch_kwargs = {
+            "user_data_dir": profile_dir,
+            "headless": False,
+            "viewport": None,
+            "user_agent": (
+                "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+                "AppleWebKit/537.36 (KHTML, like Gecko) "
+                "Chrome/120.0.0.0 Safari/537.36"
+            ),
+        }
         if self._engine_name == "chromium":
             launch_kwargs["args"] = chromium_args
         if self._exe_path:
@@ -225,38 +245,30 @@ class _BrowserThread:
             launch_kwargs["channel"] = self._channel
 
         try:
-            self._browser = await engine.launch(**launch_kwargs)
+            self._context = await engine.launch_persistent_context(**launch_kwargs)
             print(
-                f"[Browser] ✅ Launched ({self._engine_name}"
+                f"[Browser] ✅ Launched persistent profile ({self._engine_name}"
                 f"{' / ' + self._channel if self._channel else ''}"
-                f"{' / ' + self._exe_path if self._exe_path else ''})"
+                f"{' / ' + self._exe_path if self._exe_path else ''}) "
+                f"→ {profile_dir}"
             )
         except Exception as e:
             print(f"[Browser] ⚠️ Launch failed ({e}), falling back to built-in Chromium")
-            self._browser = await self._playwright.chromium.launch(
+            self._context = await self._playwright.chromium.launch_persistent_context(
+                profile_dir,
                 headless=False,
-                args=["--start-maximized"]
+                viewport=None,
+                args=["--start-maximized"],
             )
 
     async def _get_page(self):
         """
         Mevcut sayfayı döndürür.
         - Tarayıcı kapalıysa açar.
-        - Context yoksa oluşturur.
         - Sayfa kapalıysa yeni sekme açar (aynı pencerede).
         - Sayfa zaten açıksa aynı sayfayı döndürür (yeni pencere açmaz).
         """
         await self._launch_browser_if_needed()
-
-        if self._context is None:
-            self._context = await self._browser.new_context(
-                viewport=None,
-                user_agent=(
-                    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
-                    "AppleWebKit/537.36 (KHTML, like Gecko) "
-                    "Chrome/120.0.0.0 Safari/537.36"
-                )
-            )
 
         if self._page is None or self._page.is_closed():
             self._page = await self._context.new_page()
@@ -405,8 +417,8 @@ class _BrowserThread:
         return f"Could not find input: '{description}' ({'; '.join(failures)})"
 
     async def _close_browser(self) -> str:
-        if self._browser:
-            await self._browser.close()
+        if self._context:
+            await self._context.close()
             self._browser = None
             self._context = None
             self._page    = None

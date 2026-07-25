@@ -1,4 +1,5 @@
 import json
+import os
 import re
 from datetime import datetime
 from threading import Lock
@@ -44,9 +45,22 @@ def load_memory() -> dict:
                         data[key] = {}
                 return data
             return _empty_memory()
-        except Exception as e:
+        except (OSError, json.JSONDecodeError, UnicodeDecodeError) as e:
             print(f"[Memory] ⚠️ Load error: {e}")
+            _quarantine_corrupt_file()
             return _empty_memory()
+
+
+def _quarantine_corrupt_file() -> None:
+    """Moves an unreadable memory file aside so it is not silently overwritten."""
+    backup = MEMORY_PATH.with_suffix(
+        f".corrupt-{datetime.now().strftime('%Y%m%d-%H%M%S')}.json"
+    )
+    try:
+        MEMORY_PATH.replace(backup)
+        print(f"[Memory] 🗄️ Unreadable memory file moved to: {backup}")
+    except OSError as e:
+        print(f"[Memory] ❌ Could not preserve unreadable memory file: {e}")
 
 
 def _all_entries(memory: dict) -> list[tuple]:
@@ -79,16 +93,19 @@ def _trim_to_limit(memory: dict) -> dict:
 
 def save_memory(memory: dict) -> None:
     if not isinstance(memory, dict):
-        return
+        raise TypeError(f"save_memory expects a dict, got {type(memory).__name__}")
 
     memory = _trim_to_limit(memory)
 
     MEMORY_PATH.parent.mkdir(parents=True, exist_ok=True)
+    tmp_path = MEMORY_PATH.with_suffix(".tmp")
     with _lock:
-        MEMORY_PATH.write_text(
+        # Write to a temp file first so a failed write cannot truncate memory.
+        tmp_path.write_text(
             json.dumps(memory, indent=2, ensure_ascii=False),
             encoding="utf-8"
         )
+        os.replace(tmp_path, MEMORY_PATH)
 
 
 def _truncate_value(val: str) -> str:
@@ -210,7 +227,8 @@ def extract_memory(user_text: str, jarvis_text: str, api_key: str = "") -> dict:
 
         return json.loads(clean)
 
-    except json.JSONDecodeError:
+    except json.JSONDecodeError as e:
+        print(f"[Memory] ⚠️ Extract returned invalid JSON: {e}")
         return {}
     except Exception as e:
         if "429" not in str(e):

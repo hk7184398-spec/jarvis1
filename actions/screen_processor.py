@@ -60,7 +60,7 @@ def _get_api_key() -> str:
             raise ValueError("gemini_api_key not found")
         return key
     except Exception as e:
-        raise RuntimeError(f"Could not load API key: {e}")
+        raise RuntimeError(f"Could not load API key from {API_CONFIG_PATH}: {e}") from e
 
 
 def _get_camera_index() -> int:
@@ -69,8 +69,10 @@ def _get_camera_index() -> int:
             cfg = json.load(f)
         if "camera_index" in cfg:
             return int(cfg["camera_index"])
-    except Exception:
+    except FileNotFoundError:
         pass
+    except (OSError, json.JSONDecodeError, TypeError, ValueError) as e:
+        print(f"[Camera] ⚠️ Could not read camera_index from config: {e}")
 
     print("[Camera] 🔍 No camera index in config. Auto-detecting...")
     best_index = 0

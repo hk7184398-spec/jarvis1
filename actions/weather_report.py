@@ -34,8 +34,9 @@ def weather_action(
 
     try:
         webbrowser.open(url)
-    except Exception:
-        msg = f"Sir, I couldn't open the browser for the weather report."
+    except Exception as e:
+        print(f"[Weather] ❌ Could not open browser: {e}")
+        msg = f"Sir, I couldn't open the browser for the weather report: {e}"
         _speak_and_log(msg, player)
         return msg
 
@@ -48,8 +49,8 @@ def weather_action(
                 query=search_query,
                 response=msg
             )
-        except Exception:
-            pass  
+        except Exception as e:
+            print(f"[Weather] ⚠️ Could not record search in session memory: {e}")
 
     return msg
 
@@ -58,5 +59,5 @@ def _speak_and_log(message: str, player=None):
     if player:
         try:
             player.write_log(f"JARVIS: {message}")
-        except Exception:
-            pass
+        except Exception as e:
+            print(f"[Weather] ⚠️ Could not write to UI log: {e}")

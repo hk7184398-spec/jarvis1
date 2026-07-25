@@ -1,5 +1,6 @@
 import threading
 import time
+import traceback
 import uuid
 from dataclasses import dataclass, field
 from enum import Enum
@@ -77,6 +78,12 @@ class TaskQueue:
         speak:       Callable | None = None,
         on_complete: Callable | None = None,
     ) -> str:
+        """
+        Queues a goal for background execution.
+
+        on_complete is called as on_complete(task_id, result, error) once the
+        task settles: error is "" on success and the failure message otherwise.
+        """
 
         task_id = str(uuid.uuid4())[:8]
         task    = Task(
@@ -153,7 +160,10 @@ class TaskQueue:
                     try:
                         self._queue.remove(task)
                     except ValueError:
-                        pass
+                        print(
+                            f"[TaskQueue] ⚠️ Task [{task.task_id}] was already "
+                            f"removed from the queue"
+                        )
 
             if task:
                 threading.Thread(
@@ -189,23 +199,39 @@ class TaskQueue:
                     task.result = result
                 self._active_count -= 1
 
-            if task.on_complete and not task.cancel_flag.is_set():
-                try:
-                    task.on_complete(task.task_id, result)
-                except Exception as e:
-                    print(f"[TaskQueue] ⚠️ on_complete callback error: {e}")
+            if not task.cancel_flag.is_set():
+                self._notify_complete(task, result, error="")
 
             print(f"[TaskQueue] ✅ Completed: [{task.task_id}]")
 
         except Exception as e:
+            error = str(e)
             with self._lock:
                 task.status = TaskStatus.FAILED
-                task.error  = str(e)
+                task.error  = error
                 self._active_count -= 1
-            print(f"[TaskQueue] ❌ Failed: [{task.task_id}] {e}")
+            print(f"[TaskQueue] ❌ Failed: [{task.task_id}] {error}")
+            traceback.print_exc()
+
+            if task.speak:
+                try:
+                    task.speak(f"Sir, the background task failed. {error[:150]}")
+                except Exception as speak_err:
+                    print(f"[TaskQueue] ⚠️ Could not report failure: {speak_err}")
+
+            self._notify_complete(task, result=None, error=error)
 
         with self._condition:
             self._condition.notify()
+
+    def _notify_complete(self, task: Task, result: Any, error: str) -> None:
+        if not task.on_complete:
+            return
+        try:
+            task.on_complete(task.task_id, result, error)
+        except Exception as e:
+            print(f"[TaskQueue] ⚠️ on_complete callback error: {e}")
+            traceback.print_exc()
 
 _queue        = TaskQueue()
 _queue_started = False

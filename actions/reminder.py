@@ -132,17 +132,22 @@ except Exception:
 
         try:
             os.remove(xml_path)
-        except Exception:
-            pass
+        except OSError as e:
+            print(f"[Reminder] ⚠️ Could not delete temp file {xml_path}: {e}")
 
         if result.returncode != 0:
             err = result.stderr.strip() or result.stdout.strip()
             print(f"[Reminder] ❌ schtasks failed: {err}")
             try:
                 os.remove(notify_script)
-            except Exception:
-                pass
-            return "I couldn't schedule the reminder due to a system error."
+            except OSError as cleanup_err:
+                print(
+                    f"[Reminder] ⚠️ Could not delete {notify_script}: {cleanup_err}"
+                )
+            return (
+                f"I couldn't schedule the reminder due to a system error: "
+                f"{err[:200]}"
+            )
 
         if player:
             player.write_log(f"[reminder] set for {date_str} {time_str}")

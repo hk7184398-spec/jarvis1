@@ -31,6 +31,7 @@ from actions.dev_agent         import dev_agent
 from actions.web_search        import web_search as web_search_action
 from actions.computer_control  import computer_control
 from actions.game_updater      import game_updater
+from actions.viral_clipper     import jarvis_tool_cut_viral_clips
 
 
 def get_base_dir():
@@ -372,6 +373,23 @@ TOOL_DECLARATIONS = [
         }
     },
     {
+        "name": "cut_viral_clips",
+        "description": (
+            "Kisi bhi video (YouTube link ya local file) se AI-detected viral moments cut "
+            "karke short clips banata hai, original quality/audio preserve karte hue. "
+            "Use whenever the user asks to extract viral clips, highlights, or shorts from a video. "
+            "Say two short sentences before calling this tool (it is a slow tool) — result is spoken back automatically."
+        ),
+        "parameters": {
+            "type": "OBJECT",
+            "properties": {
+                "video_source": {"type": "STRING",  "description": "Video URL (YouTube etc.) ya local file ka path"},
+                "num_clips":    {"type": "INTEGER", "description": "Kitni clips chahiye (default 5)"},
+            },
+            "required": ["video_source"]
+        }
+    },
+    {
         "name": "flight_finder",
         "description": "Searches Google Flights and speaks the best options.",
         "parameters": {
@@ -704,6 +722,16 @@ class JarvisLive:
 
             elif name == "flight_finder":
                 r = await loop.run_in_executor(None, lambda: flight_finder(parameters=args, player=self.ui))
+                result = r or "Done."
+
+            elif name == "cut_viral_clips":
+                r = await loop.run_in_executor(
+                    None,
+                    lambda: jarvis_tool_cut_viral_clips(
+                        video_source=args["video_source"],
+                        num_clips=args.get("num_clips", 5),
+                    )
+                )
                 result = r or "Done."
             elif name == "shutdown_jarvis":
                 self.ui.write_log("SYS: Shutdown requested.")

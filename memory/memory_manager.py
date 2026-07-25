@@ -2,6 +2,7 @@ import json
 from datetime import datetime
 from threading import Lock
 
+from core.files import atomic_write_text, quarantine_corrupt_file
 from core.paths import MEMORY_PATH
 from core.text import parse_json_response
 
@@ -35,8 +36,9 @@ def load_memory() -> dict:
                         data[key] = {}
                 return data
             return _empty_memory()
-        except Exception as e:
+        except (OSError, json.JSONDecodeError, UnicodeDecodeError) as e:
             print(f"[Memory] ⚠️ Load error: {e}")
+            quarantine_corrupt_file(MEMORY_PATH, "Memory")
             return _empty_memory()
 
 
@@ -70,15 +72,13 @@ def _trim_to_limit(memory: dict) -> dict:
 
 def save_memory(memory: dict) -> None:
     if not isinstance(memory, dict):
-        return
+        raise TypeError(f"save_memory expects a dict, got {type(memory).__name__}")
 
     memory = _trim_to_limit(memory)
 
-    MEMORY_PATH.parent.mkdir(parents=True, exist_ok=True)
     with _lock:
-        MEMORY_PATH.write_text(
-            json.dumps(memory, indent=2, ensure_ascii=False),
-            encoding="utf-8"
+        atomic_write_text(
+            MEMORY_PATH, json.dumps(memory, indent=2, ensure_ascii=False)
         )
 
 
@@ -198,7 +198,8 @@ def extract_memory(user_text: str, jarvis_text: str, api_key: str = "") -> dict:
 
         return parse_json_response(raw) or {}
 
-    except json.JSONDecodeError:
+    except json.JSONDecodeError as e:
+        print(f"[Memory] ⚠️ Extract returned invalid JSON: {e}")
         return {}
     except Exception as e:
         if "429" not in str(e):

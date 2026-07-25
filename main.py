@@ -42,7 +42,8 @@ CHUNK_SIZE          = 1024
 def _load_system_prompt() -> str:
     try:
         return PROMPT_PATH.read_text(encoding="utf-8")
-    except Exception:
+    except OSError as e:
+        print(f"[JARVIS] ⚠️ Could not read {PROMPT_PATH}: {e} — using built-in prompt")
         return (
             "You are JARVIS, Tony Stark's AI assistant. "
             "Be concise, direct, and always use the provided tools to complete tasks. "
@@ -490,15 +491,7 @@ class JarvisLive:
         self.ui.on_text_command = self._on_text_command
 
     def _on_text_command(self, text: str):
-        if not self._loop or not self.session:
-            return
-        asyncio.run_coroutine_threadsafe(
-            self.session.send_client_content(
-                turns={"parts": [{"text": text}]},
-                turn_complete=True
-            ),
-            self._loop
-        )
+        self._send_text(text, source="text command")
 
     def set_speaking(self, value: bool):
         with self._speaking_lock:
@@ -509,9 +502,17 @@ class JarvisLive:
             self.ui.set_state("LISTENING")
 
     def speak(self, text: str):
+        self._send_text(text, source="speak")
+
+    def _send_text(self, text: str, source: str):
+        """Sends text to the live session, reporting instead of dropping failures."""
         if not self._loop or not self.session:
+            msg = f"Not connected yet — {source} discarded: {text[:60]}"
+            print(f"[JARVIS] ⚠️ {msg}")
+            self.ui.write_log(f"ERR: {msg}")
             return
-        asyncio.run_coroutine_threadsafe(
+
+        future = asyncio.run_coroutine_threadsafe(
             self.session.send_client_content(
                 turns={"parts": [{"text": text}]},
                 turn_complete=True
@@ -519,7 +520,15 @@ class JarvisLive:
             self._loop
         )
 
-    def speak_error(self, tool_name: str, error: str):
+        def _report(fut):
+            error = fut.exception()
+            if error is not None:
+                print(f"[JARVIS] ❌ Failed to send {source}: {error}")
+                self.ui.write_log(f"ERR: {source} not delivered — {error}")
+
+        future.add_done_callback(_report)
+
+    def speak_error(self, tool_name: str, error: object):
         short = str(error)[:120]
         self.ui.write_log(f"ERR: {tool_name} — {short}")
         self.speak(f"Sir, {tool_name} encountered an error. {short}")
@@ -622,10 +631,16 @@ class JarvisLive:
 
 
             elif name == "screen_process":
+                def _run_screen_process():
+                    try:
+                        screen_process(parameters=args, response=None,
+                                       player=self.ui, session_memory=None)
+                    except Exception as e:
+                        traceback.print_exc()
+                        self.speak_error("screen_process", e)
+
                 threading.Thread(
-                    target=screen_process,
-                    kwargs={"parameters": args, "response": None,
-                            "player": self.ui, "session_memory": None},
+                    target=_run_screen_process,
                     daemon=True
                 ).start()
                 result = "Vision module activated. Stay completely silent — vision module will speak directly."

@@ -93,7 +93,8 @@ class OpenRouterClient:
         max_tokens: int = DEFAULT_MAX_TOKENS,
         temperature: float = DEFAULT_TEMPERATURE,
         response_format: Optional[dict] = None,
-    ) -> Optional[str]:
+    ) -> tuple[Optional[str], str]:
+        """Returns (content, last_error). content is None when the call failed."""
         payload: dict = {
             "model":       model,
             "messages":    messages,
@@ -102,6 +103,8 @@ class OpenRouterClient:
         }
         if response_format:
             payload["response_format"] = response_format
+
+        last_error = "no attempt was made"
 
         for attempt in range(1, MAX_RETRIES_PER_MODEL + 1):
             try:
@@ -114,7 +117,7 @@ class OpenRouterClient:
 
                 if resp.status_code == 429:
                     self._mark_rate_limited(model)
-                    return None
+                    return None, f"{model}: rate limited (HTTP 429)"
 
                 if resp.status_code == 200:
                     data    = resp.json()
@@ -123,25 +126,37 @@ class OpenRouterClient:
                             .get("message", {})
                             .get("content", "")
                     )
-                    return content.strip() if content else None
+                    if content:
+                        return content.strip(), ""
+                    last_error = f"{model}: empty completion in response"
+                    logger.warning(f"[OpenRouter] {last_error}")
+                    return None, last_error
 
+                last_error = (
+                    f"{model}: HTTP {resp.status_code} — {resp.text[:200].strip()}"
+                )
                 logger.warning(
-                    f"[OpenRouter] {model} → HTTP {resp.status_code} "
+                    f"[OpenRouter] {last_error} "
                     f"(attempt {attempt}/{MAX_RETRIES_PER_MODEL})"
                 )
 
             except requests.exceptions.Timeout:
+                last_error = f"{model}: timeout after {REQUEST_TIMEOUT}s"
                 logger.warning(
-                    f"[OpenRouter] {model} → Timeout "
+                    f"[OpenRouter] {last_error} "
                     f"(attempt {attempt}/{MAX_RETRIES_PER_MODEL})"
                 )
+            except requests.exceptions.RequestException as e:
+                last_error = f"{model}: network error — {e}"
+                logger.warning(f"[OpenRouter] {last_error}")
             except Exception as e:
-                logger.error(f"[OpenRouter] {model} → Unexpected error: {e}")
+                last_error = f"{model}: unexpected error — {e}"
+                logger.error(f"[OpenRouter] {last_error}", exc_info=True)
 
             if attempt < MAX_RETRIES_PER_MODEL:
                 time.sleep(RETRY_DELAY)
 
-        return None
+        return None, last_error
 
     def _call_with_fallback(
         self,
@@ -152,27 +167,33 @@ class OpenRouterClient:
         temperature: float = DEFAULT_TEMPERATURE,
         response_format: Optional[dict] = None,
     ) -> str:
+        errors: list[str] = []
+
         if model and not self._is_rate_limited(model):
-            result = self._call(model, messages, max_tokens, temperature, response_format)
+            result, error = self._call(model, messages, max_tokens, temperature, response_format)
             if result:
                 return result
+            errors.append(error)
             logger.info(
-                f"[OpenRouter] Requested model failed, "
+                f"[OpenRouter] Requested model failed ({error}), "
                 f"falling back to pool: {model}"
             )
 
         for m in pool:
             if self._is_rate_limited(m):
+                errors.append(f"{m}: skipped, cooling down after rate limit")
                 continue
             logger.info(f"[OpenRouter] Trying: {m}")
-            result = self._call(m, messages, max_tokens, temperature, response_format)
+            result, error = self._call(m, messages, max_tokens, temperature, response_format)
             if result:
                 logger.info(f"[OpenRouter] ✓ Success: {m}")
                 return result
+            errors.append(error)
 
         raise RuntimeError(
             "[OpenRouter] All models failed or are rate-limited. "
-            "Check your API key and network connection."
+            "Check your API key and network connection. Last errors: "
+            + " | ".join(errors[-3:] or ["no models available in pool"])
         )
 
     def chat(
@@ -222,7 +243,7 @@ class OpenRouterClient:
             raise ValueError(
                 f"Model returned unparseable JSON: {e}\n"
                 f"Raw output: {raw[:200]}"
-            )
+            ) from e
 
     def vision(
         self,

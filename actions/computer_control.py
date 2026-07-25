@@ -39,8 +39,12 @@ def _safe_screenshot_path(requested: str | None) -> Path:
             if p.is_relative_to(root.resolve()):
                 p.parent.mkdir(parents=True, exist_ok=True)
                 return p
-    except Exception:
-        pass
+        print(
+            f"[Control] ⚠️ '{requested}' is outside the home directory — "
+            f"saving to {fallback} instead"
+        )
+    except OSError as e:
+        print(f"[Control] ⚠️ Cannot use '{requested}' ({e}) — saving to {fallback}")
     return fallback
 
 def _require_pyautogui():
@@ -118,8 +122,8 @@ def _user_profile() -> dict:
             data     = json.loads(_MEMORY_PATH.read_text(encoding="utf-8"))
             identity = data.get("identity", {})
             return {k: v.get("value", "") for k, v in identity.items()}
-    except Exception:
-        pass
+    except (OSError, json.JSONDecodeError, UnicodeDecodeError, AttributeError) as e:
+        print(f"[Control] ⚠️ Could not read identity from memory: {e}")
     return {}
 
 def _type(text: str, interval: float = 0.03) -> str:

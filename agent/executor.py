@@ -27,8 +27,8 @@ def _run_generated_code(description: str, speak: Callable | None = None) -> str:
             key     = winreg.OpenKey(winreg.HKEY_CURRENT_USER,
                 r"Software\Microsoft\Windows\CurrentVersion\Explorer\Shell Folders")
             desktop = Path(winreg.QueryValueEx(key, "Desktop")[0])
-        except Exception:
-            pass
+        except (ImportError, OSError) as e:
+            print(f"[Executor] ⚠️ Could not resolve Desktop path from registry: {e}")
 
     model = get_generative_model(
         "gemini-2.5-flash",
@@ -68,8 +68,8 @@ def _run_generated_code(description: str, speak: Callable | None = None) -> str:
 
         try:
             os.unlink(tmp_path)
-        except Exception:
-            pass
+        except OSError as e:
+            print(f"[Executor] ⚠️ Could not delete temp script {tmp_path}: {e}")
 
         output = result.stdout.strip()
         error  = result.stderr.strip()
@@ -82,12 +82,12 @@ def _run_generated_code(description: str, speak: Callable | None = None) -> str:
             raise RuntimeError(f"Code error: {error[:400]}")
         return "Completed."
 
-    except subprocess.TimeoutExpired:
-        raise RuntimeError("Generated code timed out after 120 seconds.")
+    except subprocess.TimeoutExpired as e:
+        raise RuntimeError("Generated code timed out after 120 seconds.") from e
     except RuntimeError:
         raise
     except Exception as e:
-        raise RuntimeError(f"Generated code failed: {e}")
+        raise RuntimeError(f"Generated code failed: {e}") from e
 
 def _inject_context(params: dict, tool: str, step_results: dict, goal: str = "") -> dict:
     if not step_results:
@@ -118,7 +118,8 @@ def _detect_language(text: str) -> str:
             f"Text: {text[:200]}"
         )
         return response.text.strip()
-    except Exception:
+    except Exception as e:
+        print(f"[Executor] ⚠️ Language detection failed: {e} — assuming English")
         return "English"
 
 
@@ -329,6 +330,10 @@ class AgentExecutor:
                                     break
                                 except Exception as fix_err:
                                     print(f"[Executor] ⚠️ Fix failed: {fix_err}")
+                                    error_msg = (
+                                        f"{error_msg} (alternative approach also "
+                                        f"failed: {fix_err})"
+                                    )
 
                             failed_step  = step
                             failed_error = error_msg
@@ -371,6 +376,7 @@ class AgentExecutor:
             summary  = response.text.strip()
             if speak: speak(summary)
             return summary
-        except Exception:
+        except Exception as e:
+            print(f"[Executor] ⚠️ Summary generation failed: {e} — using fallback summary")
             if speak: speak(fallback)
             return fallback

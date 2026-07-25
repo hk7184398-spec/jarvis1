@@ -104,11 +104,10 @@ def delete_file(path: str, confirm: bool = True) -> str:
             return f"Not found: {path}"
 
         try:
-
             send2trash.send2trash(str(target))
             return f"Moved to Recycle Bin: {target.name}"
-        except ImportError:
-            pass
+        except Exception as e:
+            print(f"[Files] ⚠️ Recycle Bin unavailable ({e}) — deleting permanently")
 
         # Fallback: permanent delete
         if target.is_dir():

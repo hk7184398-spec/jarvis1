@@ -46,8 +46,8 @@ def _get_camera_index() -> int:
         cfg = load_config()
         if "camera_index" in cfg:
             return int(cfg["camera_index"])
-    except Exception:
-        pass
+    except (TypeError, ValueError) as e:
+        print(f"[Camera] ⚠️ Invalid camera_index in config: {e}")
 
     print("[Camera] 🔍 No camera index in config. Auto-detecting...")
     best_index = 0

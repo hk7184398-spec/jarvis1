@@ -7,6 +7,7 @@ import subprocess
 import sys
 import threading
 import time
+import traceback
 from pathlib import Path
 
 import psutil
@@ -78,11 +79,15 @@ class _SysMetrics:
         t.start()
 
     def _loop(self):
+        last_error = ""
         while self._running:
             try:
                 self._update()
-            except Exception:
-                pass
+            except Exception as e:
+                # Metrics are best-effort, but a repeating failure must be visible.
+                if str(e) != last_error:
+                    last_error = str(e)
+                    print(f"[SysMetrics] ⚠️ Metrics update failed: {e}")
             time.sleep(1.5)
 
     def _update(self):
@@ -278,7 +283,8 @@ class HudCanvas(QWidget):
             img.save(buf, format="PNG")
             px = QPixmap(); px.loadFromData(buf.getvalue())
             self._face_px = px
-        except Exception:
+        except Exception as e:
+            print(f"[UI] ⚠️ Could not load face image '{path}': {e}")
             self._face_px = None
 
     def _step(self):
@@ -1385,7 +1391,7 @@ class MainWindow(QMainWindow):
                 f"Briefly tell the user you can see the file '{p.name}' "
                 f"({size}) has been uploaded and ask what they'd like to do with it."
             )
-            threading.Thread(target=self.on_text_command, args=(msg,), daemon=True).start()
+            self._dispatch_command(msg, source="file upload")
 
     def _toggle_mute(self):
         self._muted = not self._muted
@@ -1422,8 +1428,23 @@ class MainWindow(QMainWindow):
         if not txt: return
         self._input.clear()
         self._log.append_log(f"You: {txt}")
-        if self.on_text_command:
-            threading.Thread(target=self.on_text_command, args=(txt,), daemon=True).start()
+        self._dispatch_command(txt, source="text input")
+
+    def _dispatch_command(self, text: str, source: str):
+        """Runs on_text_command off the UI thread, logging failures instead of losing them."""
+        handler = self.on_text_command
+        if not handler:
+            return
+
+        def _run():
+            try:
+                handler(text)
+            except Exception as e:
+                print(f"[UI] ❌ {source} handler failed: {e}")
+                traceback.print_exc()
+                self._log.append_log(f"ERR: {source} failed — {e}")
+
+        threading.Thread(target=_run, daemon=True, name=f"ui-{source}").start()
 
     def _apply_state(self, state: str):
         self.hud.state    = state
@@ -1450,11 +1471,17 @@ class MainWindow(QMainWindow):
 
     # Change signature:
     def _on_setup_done(self, key: str, or_key: str, os_name: str):
-        update_config(
-            gemini_api_key=key,
-            openrouter_api_key=or_key,
-            os_system=os_name,
-        )
+        try:
+            update_config(
+                gemini_api_key=key,
+                openrouter_api_key=or_key,
+                os_system=os_name,
+            )
+        except OSError as e:
+            print(f"[UI] ❌ Could not save configuration: {e}")
+            self._log.append_log(f"ERR: could not save configuration — {e}")
+            return
+
         self._ready = True
         if self._overlay:
             self._overlay.hide()

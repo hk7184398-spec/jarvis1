@@ -477,8 +477,8 @@ Be specific and actionable. If you see an error message, quote it exactly."""
 
         try:
             screenshot_path.unlink()
-        except Exception:
-            pass
+        except OSError as e:
+            print(f"[Code] ⚠️ Could not delete {screenshot_path}: {e}")
 
         if file_path and file_content:
 
@@ -496,8 +496,8 @@ Be specific and actionable. If you see an error message, quote it exactly."""
 
         try:
             screenshot_path.unlink()
-        except Exception:
-            pass
+        except OSError as cleanup_err:
+            print(f"[Code] ⚠️ Could not delete {screenshot_path}: {cleanup_err}")
         return f"Screen analysis failed: {e}"
 
 

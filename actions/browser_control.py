@@ -8,6 +8,12 @@ from pathlib import Path
 from playwright.async_api import async_playwright, TimeoutError as PlaywrightTimeout
 
 
+def _short_error(error: Exception) -> str:
+    """First line of an exception message — Playwright errors are very verbose."""
+    text = str(error).strip().splitlines()
+    return (text[0] if text else type(error).__name__)[:120]
+
+
 def _get_default_browser_id() -> str:
     """Returns raw default browser identifier string for current OS."""
     system = platform.system()
@@ -38,8 +44,8 @@ def _get_default_browser_id() -> str:
             )
             return result.stdout.lower()
 
-    except Exception:
-        pass
+    except Exception as e:
+        print(f"[Browser] ⚠️ Could not detect default browser: {e}")
 
     return ""
 
@@ -347,6 +353,7 @@ class _BrowserThread:
     async def _smart_click(self, description: str) -> str:
         page       = await self._get_page()
         desc_lower = description.lower()
+        failures: list[str] = []
 
         role_hints = {
             "button":    ["button", "buton", "btn"],
@@ -359,25 +366,27 @@ class _BrowserThread:
                 try:
                     await page.get_by_role(role).first.click(timeout=5000)
                     return f"Clicked ({role}): '{description}'"
-                except Exception:
-                    pass
+                except Exception as e:
+                    failures.append(f"{role}: {_short_error(e)}")
 
         try:
             await page.get_by_text(description, exact=False).first.click(timeout=5000)
             return f"Clicked (text): '{description}'"
-        except Exception:
-            pass
+        except Exception as e:
+            failures.append(f"text: {_short_error(e)}")
 
         try:
             await page.get_by_placeholder(description, exact=False).first.click(timeout=5000)
             return f"Clicked (placeholder): '{description}'"
-        except Exception:
-            pass
+        except Exception as e:
+            failures.append(f"placeholder: {_short_error(e)}")
 
-        return f"Could not find: '{description}'"
+        print(f"[Browser] ⚠️ smart_click '{description}' failed — {'; '.join(failures)}")
+        return f"Could not find: '{description}' ({'; '.join(failures)})"
 
     async def _smart_type(self, description: str, text: str) -> str:
         page = await self._get_page()
+        failures: list[str] = []
 
         for method, locator in [
             ("placeholder", page.get_by_placeholder(description, exact=False)),
@@ -389,10 +398,11 @@ class _BrowserThread:
                 await el.clear()
                 await el.type(text, delay=50)
                 return f"Typed into ({method}): '{description}'"
-            except Exception:
-                continue
+            except Exception as e:
+                failures.append(f"{method}: {_short_error(e)}")
 
-        return f"Could not find input: '{description}'"
+        print(f"[Browser] ⚠️ smart_type '{description}' failed — {'; '.join(failures)}")
+        return f"Could not find input: '{description}' ({'; '.join(failures)})"
 
     async def _close_browser(self) -> str:
         if self._browser:

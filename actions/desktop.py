@@ -260,8 +260,8 @@ def set_wallpaper_from_url(url: str) -> str:
         result = set_wallpaper(str(tmp))
         try:
             tmp.unlink()
-        except Exception:
-            pass
+        except OSError as e:
+            print(f"[Desktop] ⚠️ Could not delete temp file {tmp}: {e}")
         return result
     except Exception as e:
         return f"Could not download wallpaper: {e}"

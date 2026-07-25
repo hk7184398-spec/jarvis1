@@ -34,6 +34,8 @@ from actions.game_updater      import game_updater
 from actions.viral_clipper     import jarvis_tool_cut_viral_clips
 from actions.website_builder   import TOOL_DECLARATIONS as website_builder_tools
 from actions.website_builder   import build_website
+from actions.screen_recorder   import TOOL_DECLARATIONS as screen_recorder_tools
+from actions.screen_recorder   import start_recording, stop_recording, get_recording_status
 
 
 def get_base_dir():
@@ -520,6 +522,7 @@ TOOL_DECLARATIONS = [
 ]
 
 TOOL_DECLARATIONS.extend(website_builder_tools)
+TOOL_DECLARATIONS.extend(screen_recorder_tools)
 
 
 class JarvisLive:
@@ -740,6 +743,18 @@ class JarvisLive:
 
             elif name == "build_website":
                 r = await loop.run_in_executor(None, lambda: build_website(parameters=args, player=self.ui))
+                result = r or "Done."
+
+            elif name == "start_screen_recording":
+                r = await loop.run_in_executor(None, lambda: start_recording(parameters=args, player=self.ui))
+                result = r or "Done."
+
+            elif name == "stop_screen_recording":
+                r = await loop.run_in_executor(None, lambda: stop_recording(parameters=args, player=self.ui))
+                result = r or "Done."
+
+            elif name == "get_screen_recording_status":
+                r = await loop.run_in_executor(None, lambda: get_recording_status(parameters=args, player=self.ui))
                 result = r or "Done."
             elif name == "shutdown_jarvis":
                 self.ui.write_log("SYS: Shutdown requested.")

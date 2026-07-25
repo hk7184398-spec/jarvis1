@@ -125,6 +125,16 @@ def _launch_macos(app_name: str) -> bool:
 
 
 def _launch_linux(app_name: str) -> bool:
+    if app_name.startswith(("http://", "https://")):
+        try:
+            import webbrowser
+            webbrowser.open(app_name)
+            time.sleep(1.0)
+            return True
+        except Exception as e:
+            print(f"[open_app] ⚠️ webbrowser.open('{app_name}') failed: {e}")
+            return False
+
     binary = (
         shutil.which(app_name) or
         shutil.which(app_name.lower()) or

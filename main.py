@@ -36,6 +36,8 @@ from actions.website_builder   import build_website
 from actions.screen_recorder   import TOOL_DECLARATIONS as screen_recorder_tools
 from actions.screen_recorder   import start_recording, stop_recording, get_recording_status
 
+from core.skill_registry       import build_registry, prompt_block, read_doc
+
 
 LIVE_MODEL          = "models/gemini-2.5-flash-native-audio-preview-12-2025"
 CHANNELS            = 1
@@ -46,14 +48,26 @@ CHUNK_SIZE          = 1024
 
 def _load_system_prompt() -> str:
     try:
-        return PROMPT_PATH.read_text(encoding="utf-8")
+        prompt = PROMPT_PATH.read_text(encoding="utf-8")
     except OSError as e:
         print(f"[JARVIS] ⚠️ Could not read {PROMPT_PATH}: {e} — using built-in prompt")
-        return (
+        prompt = (
             "You are JARVIS, Tony Stark's AI assistant. "
             "Be concise, direct, and always use the provided tools to complete tasks. "
             "Never simulate or guess results — always call the appropriate tool."
         )
+
+    # Registry ko har startup pe rebuild karo (naye modules/docs khud detect ho jayenge)
+    # aur uska summary system prompt ke saath jod do, taake Jarvis kisi bhi request
+    # ka jawab dene se pehle registry check kar sake.
+    try:
+        registry = build_registry()
+        prompt += prompt_block(registry)
+        print(f"[Registry] ✅ {len(registry['modules'])} modules, {len(registry['docs'])} docs loaded")
+    except Exception as e:
+        print(f"[Registry] ⚠️ Could not build skill registry: {e}")
+
+    return prompt
     
 _last_memory_input = ""
 
@@ -499,6 +513,24 @@ TOOL_DECLARATIONS = [
     },
 ]
 
+TOOL_DECLARATIONS.append({
+    "name": "read_project_doc",
+    "description": (
+        "Reads the full content of one of Jarvis's own project .md docs (e.g. Modules.md, "
+        "Commands.md, Architecture.md, Roadmap.md, Bug.md, Ideas.md, Tasks.md) or the "
+        "auto-generated SKILLS_REGISTRY.md. Use this whenever the skill registry summary "
+        "already in the system prompt isn't detailed enough to decide how to handle a request, "
+        "or when the user asks what a doc/module contains."
+    ),
+    "parameters": {
+        "type": "OBJECT",
+        "properties": {
+            "doc_name": {"type": "STRING", "description": "Filename of the .md doc, e.g. 'Modules.md'"}
+        },
+        "required": ["doc_name"]
+    }
+})
+
 TOOL_DECLARATIONS.extend(website_builder_tools)
 TOOL_DECLARATIONS.extend(screen_recorder_tools)
 
@@ -734,6 +766,10 @@ class JarvisLive:
             elif name == "get_screen_recording_status":
                 r = await loop.run_in_executor(None, lambda: get_recording_status(parameters=args, player=self.ui))
                 result = r or "Done."
+
+            elif name == "read_project_doc":
+                r = await loop.run_in_executor(None, lambda: read_doc(args.get("doc_name", "")))
+                result = r or "Doc not found."
             elif name == "shutdown_jarvis":
                 self.ui.write_log("SYS: Shutdown requested.")
                 self.speak("Goodbye, sir.")

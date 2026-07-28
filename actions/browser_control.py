@@ -344,11 +344,23 @@ class _BrowserThread:
         - Tarayıcı kapalıysa açar.
         - Sayfa kapalıysa yeni sekme açar (aynı pencerede).
         - Sayfa zaten açıksa aynı sayfayı döndürür (yeni pencere açmaz).
+        - Agar purana context/browser crash ho chuka ho ya bahar se band ho gaya ho
+          (window manually close karna, browser crash, waghera), to `self._context`
+          ka reference stale reh jata hai aur `new_page()` "Target page, context or
+          browser has been closed" error deta hai. Aisi halat mein khud-ba-khud
+          context ko reset kar ke browser dobara launch karta hai (self-heal).
         """
         await self._launch_browser_if_needed()
 
         if self._page is None or self._page.is_closed():
-            self._page = await self._context.new_page()
+            try:
+                self._page = await self._context.new_page()
+            except Exception as e:
+                print(f"[Browser] ⚠️ Purana context dead mila ({_short_error(e)}) — browser restart kar raha hu")
+                self._context = None
+                self._page = None
+                await self._launch_browser_if_needed()
+                self._page = await self._context.new_page()
 
         return self._page
 

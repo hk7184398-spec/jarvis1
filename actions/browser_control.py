@@ -1,4 +1,5 @@
 import asyncio
+import atexit
 import threading
 import concurrent.futures
 import platform
@@ -14,10 +15,33 @@ def _short_error(error: Exception) -> str:
     return (text[0] if text else type(error).__name__)[:120]
 
 
+def _clear_stale_singleton_locks(profile_dir: Path) -> None:
+    """
+    Agar pichli baar Jarvis crash/restart hua ya browser force-kill hua, to Chromium
+    profile folder ke andar `SingletonLock` / `SingletonCookie` / `SingletonSocket`
+    files reh jati hain. Agli baar wahi profile_dir use karte waqt Chromium in files
+    ko dekh kar samajhta hai ke "profile already in use hai" aur CHUPCHAP ek naya
+    khaali/temporary (guest-jaisa) profile khol deta hai — jo user ko bilkul
+    incognito mode jaisa lagta hai (na koi login, na history, na bookmarks),
+    jabke asal mein wahi persistent profile use nahi ho raha hota.
+
+    Isliye har launch attempt se pehle in stale lock files ko safely remove
+    karte hain, taake Jarvis hamesha wahi asli persistent profile use kare.
+    """
+    for lock_name in ("SingletonLock", "SingletonCookie", "SingletonSocket"):
+        lock_path = profile_dir / lock_name
+        try:
+            if lock_path.exists() or lock_path.is_symlink():
+                lock_path.unlink()
+        except Exception as e:
+            print(f"[Browser] ⚠️ Could not remove stale lock '{lock_name}': {e}")
+
+
 def _get_profile_dir() -> Path:
     """Persistent on-disk profile folder — keeps cookies/logins across JARVIS restarts."""
     profile_dir = Path.home() / ".jarvis" / "browser_profile"
     profile_dir.mkdir(parents=True, exist_ok=True)
+    _clear_stale_singleton_locks(profile_dir)
     return profile_dir
 
 
@@ -443,6 +467,20 @@ def _ensure_started():
         if not _bt_started:
             _bt.start()
             _bt_started = True
+
+
+def _graceful_shutdown():
+    """Process exit par browser context ko cleanly close karta hai, taake profile
+    lock properly release ho aur agli baar Jarvis start hone par incognito/guest
+    jaisa fallback na ho."""
+    if _bt_started and _bt._context is not None:
+        try:
+            _bt.run(_bt._close_browser(), timeout=5)
+        except Exception:
+            pass
+
+
+atexit.register(_graceful_shutdown)
 
 
 # ── Public API ───────────────────────────────────────────────────────────────

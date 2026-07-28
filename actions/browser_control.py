@@ -1,5 +1,6 @@
 import asyncio
 import atexit
+import os
 import threading
 import concurrent.futures
 import platform
@@ -37,11 +38,55 @@ def _clear_stale_singleton_locks(profile_dir: Path) -> None:
             print(f"[Browser] ⚠️ Could not remove stale lock '{lock_name}': {e}")
 
 
+def _ensure_profile_dir_writable(profile_dir: Path) -> None:
+    """
+    ASAL WAJAH is bug ki: agar Jarvis kabhi `sudo` se run hua ho (Kali pe aam baat hai),
+    to `~/.jarvis/browser_profile` folder ROOT-owned ban jata hai. Agli baar Jarvis
+    normal user se chalta hai to Chrome us folder mein "Preferences" / "Local State"
+    file likh hi nahi pata (Permission denied) — aur jab Chrome apna profile disk par
+    save nahi kar pata, to woh chupchap ek EPHEMERAL / IN-MEMORY session par switch
+    kar leta hai, jiska UI bilkul "Incognito" jaisa purple icon dikhata hai — HALANKE
+    code mein kahin bhi `--incognito` flag pass nahi ho rahi.
+
+    Yeh function profile_dir ki ownership/writability check karta hai aur agar
+    current user ke liye writable nahi hai, to use current user ko chown kar deta
+    hai (agar permission ho) — warna use fresh (delete + recreate) kar deta hai
+    taake Chrome hamesha real, persistent, GHAR ka apna profile use kare.
+    """
+    test_file = profile_dir / ".jarvis_write_test"
+    try:
+        test_file.write_text("ok")
+        test_file.unlink()
+        return  # already writable — sab theek hai
+    except Exception:
+        pass
+
+    print(f"[Browser] ⚠️ Profile dir '{profile_dir}' likhne layak nahi thi (shayad pehle sudo se ban gayi thi) — fix kar raha hu")
+    try:
+        uid, gid = os.getuid(), os.getgid()
+        for root, dirs, files in os.walk(profile_dir):
+            os.chown(root, uid, gid)
+            for f in files:
+                try:
+                    os.chown(os.path.join(root, f), uid, gid)
+                except Exception:
+                    pass
+        os.chown(profile_dir, uid, gid)
+    except Exception as e:
+        print(f"[Browser] ⚠️ chown fix fail hua ({e}) — profile folder ko fresh bana raha hu")
+        try:
+            shutil.rmtree(profile_dir, ignore_errors=True)
+            profile_dir.mkdir(parents=True, exist_ok=True)
+        except Exception as e2:
+            print(f"[Browser] ❌ Profile folder recreate bhi fail hua: {e2}")
+
+
 def _get_profile_dir() -> Path:
     """Persistent on-disk profile folder — keeps cookies/logins across JARVIS restarts."""
     profile_dir = Path.home() / ".jarvis" / "browser_profile"
     profile_dir.mkdir(parents=True, exist_ok=True)
     _clear_stale_singleton_locks(profile_dir)
+    _ensure_profile_dir_writable(profile_dir)
     return profile_dir
 
 
@@ -240,6 +285,14 @@ class _BrowserThread:
         # Temel chromium argümanları
         chromium_args = ["--start-maximized"]
 
+        # Kali/Linux pe Jarvis aksar root se (sudo) chalta hai. Chrome jab root user
+        # se bina `--no-sandbox` ke chalaya jata hai, to woh sandbox init nahi kar pata
+        # aur is se bhi Chrome chupchap ek ephemeral/incognito-jaisi session par gir
+        # sakta hai. Root detect ho to yeh flag zaroor add karo.
+        if hasattr(os, "geteuid") and os.geteuid() == 0:
+            chromium_args += ["--no-sandbox", "--disable-dev-shm-usage"]
+            print("[Browser] 🔧 Running as root — added --no-sandbox (zaroori hai warna Chrome incognito/ephemeral session par gir sakta hai)")
+
         if self._is_opera:
             # Opera GX bazı sürümlerde varsayılan olarak private modda başlar.
             # Aşağıdaki flag'ler bunu engeller.
@@ -282,7 +335,7 @@ class _BrowserThread:
                 profile_dir,
                 headless=False,
                 viewport=None,
-                args=["--start-maximized"],
+                args=chromium_args,
             )
 
     async def _get_page(self):

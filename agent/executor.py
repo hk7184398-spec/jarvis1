@@ -1,5 +1,3 @@
-import json
-import re
 import sys
 import threading
 import subprocess
@@ -10,32 +8,11 @@ from typing import Callable
 
 from agent.planner       import create_plan, replan
 from agent.error_handler import analyze_error, generate_fix, ErrorDecision
+from core.gemini         import get_generative_model
+from core.text           import strip_code_fences
 
-
-def get_base_dir() -> Path:
-    if getattr(sys, "frozen", False):
-        return Path(sys.executable).parent
-    return Path(__file__).resolve().parent.parent
-
-
-BASE_DIR        = get_base_dir()
-API_CONFIG_PATH = BASE_DIR / "config" / "api_keys.json"
-
-
-def _get_api_key() -> str:
-    try:
-        with open(API_CONFIG_PATH, "r", encoding="utf-8") as f:
-            return json.load(f)["gemini_api_key"]
-    except FileNotFoundError as e:
-        raise RuntimeError(f"API key file not found: {API_CONFIG_PATH}") from e
-    except json.JSONDecodeError as e:
-        raise RuntimeError(f"{API_CONFIG_PATH} is not valid JSON: {e}") from e
-    except KeyError as e:
-        raise RuntimeError(f"'gemini_api_key' missing from {API_CONFIG_PATH}") from e
 
 def _run_generated_code(description: str, speak: Callable | None = None) -> str:
-    import google.generativeai as genai
-
     if speak:
         speak("Writing custom code for this task, sir.")
 
@@ -53,9 +30,8 @@ def _run_generated_code(description: str, speak: Callable | None = None) -> str:
         except (ImportError, OSError) as e:
             print(f"[Executor] ⚠️ Could not resolve Desktop path from registry: {e}")
 
-    genai.configure(api_key=_get_api_key())
-    model = genai.GenerativeModel(
-        model_name="gemini-2.5-flash",
+    model = get_generative_model(
+        "gemini-2.5-flash",
         system_instruction=(
             "You are an expert Python developer. "
             "Write clean, complete, working Python code. "
@@ -67,15 +43,14 @@ def _run_generated_code(description: str, speak: Callable | None = None) -> str:
             f"  Downloads = r'{downloads}'\n"
             f"  Documents = r'{documents}'\n"
             f"  Home      = r'{home}'\n"
-        )
+        ),
     )
 
     try:
         response = model.generate_content(
             f"Write Python code to accomplish this task:\n\n{description}"
         )
-        code = response.text.strip()
-        code = re.sub(r"```(?:python)?", "", code).strip().rstrip("`").strip()
+        code = strip_code_fences(response.text)
 
         with tempfile.NamedTemporaryFile(
             mode="w", suffix=".py", delete=False, encoding="utf-8"
@@ -135,9 +110,7 @@ def _inject_context(params: dict, tool: str, step_results: dict, goal: str = "")
 
     return params
 def _detect_language(text: str) -> str:
-    import google.generativeai as genai
-    genai.configure(api_key=_get_api_key())
-    model = genai.GenerativeModel("gemini-2.5-flash-lite")
+    model = get_generative_model("gemini-2.5-flash-lite")
     try:
         response = model.generate_content(
             f"What language is this text written in? "
@@ -154,9 +127,7 @@ def _translate_to_goal_language(content: str, goal: str) -> str:
     if not goal:
         return content
     try:
-        import google.generativeai as genai
-        genai.configure(api_key=_get_api_key())
-        model = genai.GenerativeModel("gemini-2.5-flash")
+        model = get_generative_model("gemini-2.5-flash")
 
         target_lang = _detect_language(goal)
         print(f"[Executor] 🌐 Translating to: {target_lang}")
@@ -393,9 +364,7 @@ class AgentExecutor:
     def _summarize(self, goal: str, completed_steps: list, speak: Callable | None) -> str:
         fallback = f"All done, sir. Completed {len(completed_steps)} steps for: {goal[:60]}."
         try:
-            import google.generativeai as genai
-            genai.configure(api_key=_get_api_key())
-            model     = genai.GenerativeModel(model_name="gemini-2.5-flash-lite")
+            model     = get_generative_model("gemini-2.5-flash-lite")
             steps_str = "\n".join(f"- {s.get('description', '')}" for s in completed_steps)
             prompt    = (
                 f'User goal: "{goal}"\n'

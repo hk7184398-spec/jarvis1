@@ -4,6 +4,7 @@ import types
 import pytest
 
 from actions import web_search as ws
+from core.paths import get_base_dir
 
 
 class FakePlayer:
@@ -15,7 +16,7 @@ class FakePlayer:
 
 
 def test_get_base_dir_points_at_repo_root():
-    assert (ws._get_base_dir() / "actions").is_dir()
+    assert (get_base_dir() / "actions").is_dir()
 
 
 def test_format_ddg_without_results():
@@ -99,7 +100,7 @@ def test_ddg_search_maps_result_fields(monkeypatch):
     ]
 
 
-def test_gemini_search_concatenates_text_parts(monkeypatch):
+def test_gemini_search_concatenates_text_parts(monkeypatch, api_keys_file):
     class FakePart:
         def __init__(self, text):
             self.text = text
@@ -120,13 +121,11 @@ def test_gemini_search_concatenates_text_parts(monkeypatch):
     monkeypatch.setitem(sys.modules, "google", google_pkg)
     monkeypatch.setitem(sys.modules, "google.genai", genai)
     monkeypatch.setattr(google_pkg, "genai", genai, raising=False)
-    monkeypatch.setattr(ws, "_get_api_key", lambda: "key")
 
     assert ws._gemini_search("hi") == "Hello world"
 
 
-def test_gemini_search_rejects_empty_response(monkeypatch):
-    monkeypatch.setattr(ws, "_get_api_key", lambda: "key")
+def test_gemini_search_rejects_empty_response(monkeypatch, api_keys_file):
 
     class FakeModels:
         def generate_content(self, **kwargs):

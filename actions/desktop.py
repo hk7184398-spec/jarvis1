@@ -1,8 +1,6 @@
 #desktop.py
 import ast
 import os
-import sys
-import json
 import shutil
 import subprocess
 import tempfile
@@ -16,20 +14,10 @@ try:
 except ImportError:
     _PYAUTOGUI = False
 
+from core.platform_utils import get_desktop_dir as _get_desktop
+from core.text import strip_code_fences
+
 _OS = platform.system()  # "Windows" | "Darwin" | "Linux"
-
-
-def _get_base_dir() -> Path:
-    if getattr(sys, "frozen", False):
-        return Path(sys.executable).parent
-    return Path(__file__).resolve().parent.parent
-
-def _get_desktop() -> Path:
-    if _OS == "Linux":
-        xdg = os.environ.get("XDG_DESKTOP_DIR", "")
-        if xdg and Path(xdg).exists():
-            return Path(xdg)
-    return Path.home() / "Desktop"
 
 def _build_sandbox() -> dict:
     import time
@@ -113,10 +101,7 @@ def _execute_generated_code(code: str, player=None) -> str:
     if not code or code.strip() == "UNSAFE":
         return "This action cannot be performed safely."
 
-    # Kod temizleme
-    if code.startswith("```"):
-        lines = code.split("\n")
-        code  = "\n".join(lines[1:-1]).strip()
+    code = strip_code_fences(code)
 
     reason = _validate_generated_code(code)
     if reason:

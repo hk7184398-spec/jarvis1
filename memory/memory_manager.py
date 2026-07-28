@@ -1,20 +1,11 @@
 import json
-import os
-import re
 from datetime import datetime
 from threading import Lock
-from pathlib import Path
-import sys
 
+from core.files import atomic_write_text, quarantine_corrupt_file
+from core.paths import MEMORY_PATH
+from core.text import parse_json_response
 
-def get_base_dir() -> Path:
-    if getattr(sys, "frozen", False):
-        return Path(sys.executable).parent
-    return Path(__file__).resolve().parent.parent
-
-
-BASE_DIR         = get_base_dir()
-MEMORY_PATH      = BASE_DIR / "memory" / "long_term.json"
 _lock            = Lock()
 MAX_VALUE_LENGTH = 380
 MEMORY_MAX_CHARS = 2200
@@ -47,20 +38,8 @@ def load_memory() -> dict:
             return _empty_memory()
         except (OSError, json.JSONDecodeError, UnicodeDecodeError) as e:
             print(f"[Memory] ⚠️ Load error: {e}")
-            _quarantine_corrupt_file()
+            quarantine_corrupt_file(MEMORY_PATH, "Memory")
             return _empty_memory()
-
-
-def _quarantine_corrupt_file() -> None:
-    """Moves an unreadable memory file aside so it is not silently overwritten."""
-    backup = MEMORY_PATH.with_suffix(
-        f".corrupt-{datetime.now().strftime('%Y%m%d-%H%M%S')}.json"
-    )
-    try:
-        MEMORY_PATH.replace(backup)
-        print(f"[Memory] 🗄️ Unreadable memory file moved to: {backup}")
-    except OSError as e:
-        print(f"[Memory] ❌ Could not preserve unreadable memory file: {e}")
 
 
 def _all_entries(memory: dict) -> list[tuple]:
@@ -97,15 +76,10 @@ def save_memory(memory: dict) -> None:
 
     memory = _trim_to_limit(memory)
 
-    MEMORY_PATH.parent.mkdir(parents=True, exist_ok=True)
-    tmp_path = MEMORY_PATH.with_suffix(".tmp")
     with _lock:
-        # Write to a temp file first so a failed write cannot truncate memory.
-        tmp_path.write_text(
-            json.dumps(memory, indent=2, ensure_ascii=False),
-            encoding="utf-8"
+        atomic_write_text(
+            MEMORY_PATH, json.dumps(memory, indent=2, ensure_ascii=False)
         )
-        os.replace(tmp_path, MEMORY_PATH)
 
 
 def _truncate_value(val: str) -> str:
@@ -219,13 +193,10 @@ def extract_memory(user_text: str, jarvis_text: str, api_key: str = "") -> dict:
             temperature=0.2,
         )
 
-        clean = raw.strip()
-        clean = re.sub(r"```(?:json)?", "", clean).strip().rstrip("`").strip()
-
-        if not clean or clean == "{}":
+        if not raw.strip():
             return {}
 
-        return json.loads(clean)
+        return parse_json_response(raw) or {}
 
     except json.JSONDecodeError as e:
         print(f"[Memory] ⚠️ Extract returned invalid JSON: {e}")

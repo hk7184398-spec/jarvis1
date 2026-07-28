@@ -7,8 +7,8 @@ from agent.error_handler import ErrorDecision
 
 
 @pytest.fixture(autouse=True)
-def api_key(monkeypatch):
-    monkeypatch.setattr(error_handler, "_get_api_key", lambda: "test-key")
+def api_key(api_keys_file):
+    return api_keys_file
 
 
 STEP = {

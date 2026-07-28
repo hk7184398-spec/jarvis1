@@ -6,21 +6,24 @@ from unittest import mock
 
 import pytest
 
+from core import config as core_config
 
-def _load_or_client(api_keys: dict | None = None, side_effect=None):
+
+def _load_or_client(tmp_path, monkeypatch, api_keys: dict | None = None, write=True):
     """Imports ``or_client`` with a stubbed api_keys.json (a client is built at import)."""
-    payload = json.dumps({"openrouter_api_key": "test-key"} if api_keys is None else api_keys)
+    path = tmp_path / "api_keys.json"
+    if write:
+        payload = {"openrouter_api_key": "test-key"} if api_keys is None else api_keys
+        path.write_text(json.dumps(payload), encoding="utf-8")
+    monkeypatch.setattr(core_config, "API_CONFIG_PATH", path)
+    monkeypatch.setattr(core_config, "CONFIG_DIR", tmp_path)
     sys.modules.pop("or_client", None)
-    with mock.patch("builtins.open", mock.mock_open(read_data=payload)) as opener:
-        if side_effect:
-            opener.side_effect = side_effect
-        return importlib.import_module("or_client")
+    return importlib.import_module("or_client")
 
 
 @pytest.fixture
-def or_client(monkeypatch):
-    module = _load_or_client()
-    monkeypatch.setattr(module, "_load_api_key", lambda: "test-key")
+def or_client(tmp_path, monkeypatch):
+    module = _load_or_client(tmp_path, monkeypatch)
     module._rate_limited.clear()
     yield module
     module._rate_limited.clear()
@@ -40,14 +43,14 @@ def _content(text):
     return {"choices": [{"message": {"content": text}}]}
 
 
-def test_load_api_key_missing_file():
+def test_load_api_key_missing_file(tmp_path, monkeypatch):
     with pytest.raises(RuntimeError, match="api_keys.json not found"):
-        _load_or_client(side_effect=FileNotFoundError())
+        _load_or_client(tmp_path, monkeypatch, write=False)
 
 
-def test_load_api_key_empty_key():
-    with pytest.raises(RuntimeError, match="Failed to load OpenRouter API key"):
-        _load_or_client({"openrouter_api_key": "  "})
+def test_load_api_key_empty_key(tmp_path, monkeypatch):
+    with pytest.raises(RuntimeError, match="'openrouter_api_key' is missing or empty"):
+        _load_or_client(tmp_path, monkeypatch, {"openrouter_api_key": "  "})
 
 
 def test_module_level_client_is_built_from_config_file(or_client):

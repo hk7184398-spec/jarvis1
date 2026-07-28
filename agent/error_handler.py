@@ -1,18 +1,8 @@
 import json
-import re
-import sys
-from pathlib import Path
 from enum import Enum
 
-
-def get_base_dir() -> Path:
-    if getattr(sys, "frozen", False):
-        return Path(sys.executable).parent
-    return Path(__file__).resolve().parent.parent
-
-
-BASE_DIR        = get_base_dir()
-API_CONFIG_PATH = BASE_DIR / "config" / "api_keys.json"
+from core.gemini import get_generative_model
+from core.text import parse_json_response, strip_code_fences
 
 
 class ErrorDecision(Enum):
@@ -49,18 +39,6 @@ Return ONLY valid JSON:
 """
 
 
-def _get_api_key() -> str:
-    try:
-        with open(API_CONFIG_PATH, "r", encoding="utf-8") as f:
-            return json.load(f)["gemini_api_key"]
-    except FileNotFoundError as e:
-        raise RuntimeError(f"API key file not found: {API_CONFIG_PATH}") from e
-    except json.JSONDecodeError as e:
-        raise RuntimeError(f"{API_CONFIG_PATH} is not valid JSON: {e}") from e
-    except KeyError as e:
-        raise RuntimeError(f"'gemini_api_key' missing from {API_CONFIG_PATH}") from e
-
-
 def analyze_error(
     step: dict,
     error: str,
@@ -85,8 +63,6 @@ def analyze_error(
             "user_message": str
         }
     """
-    import google.generativeai as genai
-
     if attempt >= max_attempts:
         print(f"[ErrorHandler] ⚠️ Max attempts reached for step {step.get('step')} — forcing replan")
         return {
@@ -97,10 +73,9 @@ def analyze_error(
             "user_message":  "Trying a different approach, sir."
         }
 
-    genai.configure(api_key=_get_api_key())
-    model = genai.GenerativeModel(
-        model_name="gemini-2.5-flash-lite",
-        system_instruction=ERROR_ANALYST_PROMPT
+    model = get_generative_model(
+        "gemini-2.5-flash-lite",
+        system_instruction=ERROR_ANALYST_PROMPT,
     )
 
     prompt = f"""Failed step:
@@ -116,10 +91,8 @@ Attempt number: {attempt}"""
 
     try:
         response = model.generate_content(prompt)
-        text     = response.text.strip()
-        text     = re.sub(r"```(?:json)?", "", text).strip().rstrip("`").strip()
 
-        result = json.loads(text)
+        result = parse_json_response(response.text)
         decision_str = result.get("decision", "replan").lower()
         decision_map = {
             "retry":  ErrorDecision.RETRY,
@@ -155,10 +128,7 @@ def generate_fix(step: dict, error: str, fix_suggestion: str) -> dict:
 
     Returns a modified step dict.
     """
-    import google.generativeai as genai
-
-    genai.configure(api_key=_get_api_key())
-    model = genai.GenerativeModel(model_name="gemini-2.0-flash")
+    model = get_generative_model("gemini-2.0-flash")
 
     prompt = f"""A task step failed. Generate a replacement step.
 
@@ -175,8 +145,7 @@ Return ONLY the Python code, no explanation."""
 
     try:
         response = model.generate_content(prompt)
-        code = response.text.strip()
-        code = re.sub(r"```(?:python)?", "", code).strip().rstrip("`").strip()
+        code = strip_code_fences(response.text)
 
         return {
             "step":        step.get("step"),

@@ -5,12 +5,9 @@ import pytest
 from agent import planner
 
 
-_REAL_GET_API_KEY = planner._get_api_key
-
-
 @pytest.fixture(autouse=True)
-def api_key(monkeypatch):
-    monkeypatch.setattr(planner, "_get_api_key", lambda: "test-key")
+def api_key(api_keys_file):
+    return api_keys_file
 
 
 VALID_PLAN = {
@@ -25,13 +22,6 @@ VALID_PLAN = {
         }
     ],
 }
-
-
-def test_get_api_key_reads_config(tmp_path, monkeypatch):
-    config = tmp_path / "api_keys.json"
-    config.write_text(json.dumps({"gemini_api_key": "abc"}), encoding="utf-8")
-    monkeypatch.setattr(planner, "API_CONFIG_PATH", config)
-    assert _REAL_GET_API_KEY() == "abc"
 
 
 def test_create_plan_returns_parsed_plan(fake_genai):

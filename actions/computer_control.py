@@ -4,7 +4,6 @@ import json
 import re
 import string
 import subprocess
-import sys
 import time
 import random
 from pathlib import Path
@@ -23,27 +22,8 @@ try:
 except ImportError:
     _PYPERCLIP = False
 
-def _base_dir() -> Path:
-    if getattr(sys, "frozen", False):
-        return Path(sys.executable).parent
-    return Path(__file__).resolve().parent.parent
-
-
-_BASE         = _base_dir()
-_CONFIG_PATH  = _BASE / "config" / "api_keys.json"
-_MEMORY_PATH  = _BASE / "memory" / "long_term.json"
-
-def _load_config() -> dict:
-    try:
-        return json.loads(_CONFIG_PATH.read_text(encoding="utf-8"))
-    except FileNotFoundError:
-        return {}
-    except (OSError, json.JSONDecodeError, UnicodeDecodeError) as e:
-        print(f"[Control] ⚠️ Could not read {_CONFIG_PATH}: {e}")
-        return {}
-
-def _get_os() -> str:
-    return _load_config().get("os_system", "windows").lower()
+from core.config import get_os as _get_os
+from core.paths import MEMORY_PATH as _MEMORY_PATH
 
 _SAFE_SCREENSHOT_ROOTS = (
     Path.home(),

@@ -2,6 +2,8 @@ import json
 
 import pytest
 
+from core import config as core_config
+from core import paths as core_paths
 from memory import config_manager
 
 
@@ -11,6 +13,8 @@ def config_dir(tmp_path, monkeypatch):
     monkeypatch.setattr(config_manager, "BASE_DIR", tmp_path)
     monkeypatch.setattr(config_manager, "CONFIG_DIR", config_dir)
     monkeypatch.setattr(config_manager, "CONFIG_FILE", config_dir / "api_keys.json")
+    monkeypatch.setattr(core_config, "CONFIG_DIR", config_dir)
+    monkeypatch.setattr(core_config, "API_CONFIG_PATH", config_dir / "api_keys.json")
     return config_dir
 
 
@@ -19,8 +23,8 @@ def test_get_base_dir_returns_repo_root():
 
 
 def test_get_base_dir_when_frozen(monkeypatch, tmp_path):
-    monkeypatch.setattr(config_manager.sys, "frozen", True, raising=False)
-    monkeypatch.setattr(config_manager.sys, "executable", str(tmp_path / "jarvis.exe"))
+    monkeypatch.setattr(core_paths.sys, "frozen", True, raising=False)
+    monkeypatch.setattr(core_paths.sys, "executable", str(tmp_path / "jarvis.exe"))
     assert config_manager.get_base_dir() == tmp_path
 
 
@@ -69,7 +73,7 @@ def test_load_api_keys_corrupt_file(config_dir, capsys):
     config_dir.mkdir()
     (config_dir / "api_keys.json").write_text("{invalid", encoding="utf-8")
     assert config_manager.load_api_keys() == {}
-    assert "Failed to load api_keys.json" in capsys.readouterr().out
+    assert "is not valid JSON" in capsys.readouterr().out
 
 
 def test_get_gemini_key(config_dir):

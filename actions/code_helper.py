@@ -13,40 +13,22 @@
 
 import subprocess
 import sys
-import json
 import re
 import time
 from pathlib import Path
 
+from core.gemini import get_generative_model, get_genai_client
+from core.platform_utils import get_desktop_dir
+from core.text import strip_code_fences as _clean_code
 
-def get_base_dir():
-    if getattr(sys, "frozen", False):
-        return Path(sys.executable).parent
-    return Path(__file__).resolve().parent.parent
 
-BASE_DIR           = get_base_dir()
-API_CONFIG_PATH    = BASE_DIR / "config" / "api_keys.json"
-DESKTOP            = Path.home() / "Desktop"
+DESKTOP            = get_desktop_dir()
 MAX_BUILD_ATTEMPTS = 3
 GEMINI_MODEL       = "gemini-2.5-flash"
 
 
-def _get_api_key() -> str:
-    with open(API_CONFIG_PATH, "r", encoding="utf-8") as f:
-        return json.load(f)["gemini_api_key"]
-
-
 def _get_gemini(model: str = GEMINI_MODEL):
-    import google.generativeai as genai
-    genai.configure(api_key=_get_api_key())
-    return genai.GenerativeModel(model)
-
-
-def _clean_code(text: str) -> str:
-    text = text.strip()
-    text = re.sub(r"^```[a-zA-Z]*\n?", "", text)
-    text = re.sub(r"\n?```$", "", text)
-    return text.strip()
+    return get_generative_model(model)
 
 
 def _resolve_save_path(output_path: str, language: str) -> Path:
@@ -103,7 +85,7 @@ def _has_error(output: str) -> bool:
 def _take_screenshot() -> Path | None:
     try:
         import pyautogui
-        screenshot_path = Path.home() / "Desktop" / f"jarvis_debug_{int(time.time())}.png"
+        screenshot_path = DESKTOP / f"jarvis_debug_{int(time.time())}.png"
         screenshot = pyautogui.screenshot()
         screenshot.save(str(screenshot_path))
         print(f"[Code] 📸 Screenshot: {screenshot_path}")
@@ -455,10 +437,9 @@ def _screen_debug_action(description, file_path, player, speak=None) -> str:
             print(f"[Code] ⚠️ Could not read file: {err}")
 
     try:
-        from google import genai
         from google.genai import types
 
-        client = genai.Client(api_key=_get_api_key())
+        client = get_genai_client()
 
         image_bytes  = screenshot_path.read_bytes()
         image_base64 = _image_to_base64(screenshot_path)

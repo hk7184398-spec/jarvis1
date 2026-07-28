@@ -1,7 +1,4 @@
 #computer_settings.py
-import json
-import re
-import sys
 import time
 import subprocess
 import platform
@@ -21,13 +18,9 @@ try:
 except ImportError:
     _PYPERCLIP = False
 
+from core.platform_utils import run_first_available
+
 _OS = platform.system()  # "Windows" | "Darwin" | "Linux"
-
-
-def _get_base_dir() -> Path:
-    if getattr(sys, "frozen", False):
-        return Path(sys.executable).parent
-    return Path(__file__).resolve().parent.parent
 
 def _get_macos_wifi_interface() -> str:
     try:
@@ -241,10 +234,7 @@ def open_task_manager():
     elif _OS == "Darwin":
         subprocess.Popen(["open", "-a", "Activity Monitor"])
     else:
-        for cmd in [["gnome-system-monitor"], ["xfce4-taskmanager"], ["htop"]]:
-            if subprocess.run(["which", cmd[0]], capture_output=True).returncode == 0:
-                subprocess.Popen(cmd)
-                break
+        run_first_available([["gnome-system-monitor"], ["xfce4-taskmanager"], ["htop"]])
 
 
 def focus_search():
@@ -369,10 +359,10 @@ def take_screenshot():
     elif _OS == "Darwin":
         pyautogui.hotkey("command", "shift", "3")
     else:
-        for cmd in [["scrot"], ["gnome-screenshot"], ["import", "-window", "root", "screenshot.png"]]:
-            if subprocess.run(["which", cmd[0]], capture_output=True).returncode == 0:
-                subprocess.Popen(cmd)
-                return
+        if run_first_available(
+            [["scrot"], ["gnome-screenshot"], ["import", "-window", "root", "screenshot.png"]]
+        ):
+            return
         pyautogui.hotkey("ctrl", "print_screen")
 
 def lock_screen():
@@ -396,10 +386,7 @@ def open_system_settings():
     elif _OS == "Darwin":
         subprocess.Popen(["open", "-a", "System Preferences"])
     else:
-        for cmd in [["gnome-control-center"], ["xfce4-settings-manager"], ["kcmshell5"]]:
-            if subprocess.run(["which", cmd[0]], capture_output=True).returncode == 0:
-                subprocess.Popen(cmd)
-                return
+        run_first_available([["gnome-control-center"], ["xfce4-settings-manager"], ["kcmshell5"]])
 
 def open_file_explorer():
     if _OS == "Windows":
@@ -407,10 +394,8 @@ def open_file_explorer():
     elif _OS == "Darwin":
         subprocess.Popen(["open", str(Path.home())])
     else:
-        for cmd in [["nautilus"], ["thunar"], ["dolphin"], ["nemo"]]:
-            if subprocess.run(["which", cmd[0]], capture_output=True).returncode == 0:
-                subprocess.Popen(cmd)
-                return
+        if run_first_available([["nautilus"], ["thunar"], ["dolphin"], ["nemo"]]):
+            return
         subprocess.Popen(["xdg-open", str(Path.home())])
 
 def sleep_display():

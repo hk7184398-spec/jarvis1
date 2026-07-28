@@ -1,3 +1,4 @@
+import json
 import sys
 import types
 from pathlib import Path
@@ -7,6 +8,22 @@ import pytest
 BASE_DIR = Path(__file__).resolve().parent.parent
 if str(BASE_DIR) not in sys.path:
     sys.path.insert(0, str(BASE_DIR))
+
+from core import config as core_config  # noqa: E402 - needs the sys.path entry above
+
+
+@pytest.fixture
+def api_keys_file(tmp_path, monkeypatch):
+    """Points ``core.config`` at a throwaway api_keys.json holding test credentials."""
+    path = tmp_path / "config" / "api_keys.json"
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(
+        json.dumps({"gemini_api_key": "test-key", "openrouter_api_key": "test-key"}),
+        encoding="utf-8",
+    )
+    monkeypatch.setattr(core_config, "API_CONFIG_PATH", path)
+    monkeypatch.setattr(core_config, "CONFIG_DIR", path.parent)
+    return path
 
 
 class FakeResponse:

@@ -1,78 +1,26 @@
-import json
-import os
-import sys
-from datetime import datetime
-from pathlib import Path
+from core.config import config_exists, load_config, update_config
+from core.files import restrict_permissions
+from core.paths import API_CONFIG_PATH, BASE_DIR, CONFIG_DIR, get_base_dir
 
+CONFIG_FILE = API_CONFIG_PATH
 
-def get_base_dir() -> Path:
-    if getattr(sys, "frozen", False):
-        return Path(sys.executable).parent
-    return Path(__file__).resolve().parent.parent
-
-
-BASE_DIR    = get_base_dir()
-CONFIG_DIR  = BASE_DIR / "config"
-CONFIG_FILE = CONFIG_DIR / "api_keys.json"
+__all__ = [
+    "BASE_DIR", "CONFIG_DIR", "CONFIG_FILE", "config_exists", "ensure_config_dir",
+    "get_base_dir", "get_gemini_key", "is_configured", "load_api_keys",
+    "restrict_permissions", "save_api_keys",
+]
 
 
 def ensure_config_dir() -> None:
     CONFIG_DIR.mkdir(parents=True, exist_ok=True)
 
 
-def config_exists() -> bool:
-    return CONFIG_FILE.exists()
-
-
 def save_api_keys(gemini_api_key: str) -> None:
-    ensure_config_dir()
-
-    data: dict = {}
-    if CONFIG_FILE.exists():
-        try:
-            data = json.loads(CONFIG_FILE.read_text(encoding="utf-8"))
-        except (OSError, json.JSONDecodeError, UnicodeDecodeError) as e:
-            # Keep a copy: rewriting the file would drop every other key
-            # (openrouter_api_key, os_system, camera_index, ...) unnoticed.
-            backup = CONFIG_FILE.with_suffix(
-                f".corrupt-{datetime.now().strftime('%Y%m%d-%H%M%S')}.json"
-            )
-            print(f"⚠️  api_keys.json is unreadable ({e}) — backing up to {backup}")
-            try:
-                CONFIG_FILE.replace(backup)
-            except OSError as backup_err:
-                print(f"❌ Could not back up api_keys.json: {backup_err}")
-            data = {}
-
-    if not isinstance(data, dict):
-        print("⚠️  api_keys.json did not contain a JSON object — starting fresh")
-        data = {}
-
-    data["gemini_api_key"] = gemini_api_key.strip()
-
-    CONFIG_FILE.write_text(
-        json.dumps(data, indent=2),
-        encoding="utf-8"
-    )
-    restrict_permissions(CONFIG_FILE)
-
-
-def restrict_permissions(path: Path) -> None:
-    """Make the credentials file readable by its owner only (no-op on Windows)."""
-    try:
-        os.chmod(path, 0o600)
-    except OSError:
-        pass
+    update_config(gemini_api_key=gemini_api_key.strip())
 
 
 def load_api_keys() -> dict:
-    if not CONFIG_FILE.exists():
-        return {}
-    try:
-        return json.loads(CONFIG_FILE.read_text(encoding="utf-8"))
-    except (OSError, json.JSONDecodeError, UnicodeDecodeError) as e:
-        print(f"❌ Failed to load {CONFIG_FILE}: {e}")
-        return {}
+    return load_config()
 
 
 def get_gemini_key() -> str | None:

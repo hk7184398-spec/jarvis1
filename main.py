@@ -39,6 +39,7 @@ from actions.tiktok_pipeline   import TOOL_DECLARATIONS as tiktok_pipeline_tools
 from actions.tiktok_pipeline   import start_tiktok_workflow, get_tiktok_status
 
 from core.skill_registry       import build_registry, prompt_block, read_doc
+from core.mcp_manager           import McpManager  # MCP INTEGRATION
 
 
 LIVE_MODEL          = "models/gemini-2.5-flash-native-audio-preview-12-2025"
@@ -564,6 +565,7 @@ class JarvisLive:
         self._is_speaking   = False
         self._speaking_lock = threading.Lock()
         self.ui.on_text_command = self._on_text_command
+        self.mcp_manager    = McpManager()  # MCP INTEGRATION — config/mcp_servers.json se tools load hote hain
 
     def _on_text_command(self, text: str):
         self._send_text(text, source="text command")
@@ -746,6 +748,9 @@ class JarvisLive:
             elif name == "web_search":
                 r = await loop.run_in_executor(None, lambda: web_search_action(parameters=args, player=self.ui))
                 result = r or "Done."
+
+            elif self.mcp_manager.owns(name):  # MCP INTEGRATION
+                result = await self.mcp_manager.call_tool(name, args)
 
             elif name == "computer_control":
                 r = await loop.run_in_executor(None, lambda: computer_control(parameters=args, player=self.ui))
@@ -944,6 +949,12 @@ class JarvisLive:
 
     async def run(self):
         client = get_genai_client(api_version="v1beta")
+
+        # MCP INTEGRATION — ek dafa connect karo, discovered tools ko
+        # global TOOL_DECLARATIONS mein merge karo (loop shuru hone se pehle,
+        # taake _build_config() inhe turant Gemini ko bhej sake).
+        await self.mcp_manager.connect_all()
+        TOOL_DECLARATIONS.extend(self.mcp_manager.get_tool_declarations())
 
         while True:
             try:

@@ -385,9 +385,12 @@ TOOL_DECLARATIONS = [
     {
         "name": "cut_viral_clips",
         "description": (
-            "Kisi bhi video (YouTube link ya local file) se AI-detected viral moments cut "
+            "Kisi bhi EXISTING video (YouTube link ya local file) se AI-detected viral moments cut "
             "karke short clips banata hai, original quality/audio preserve karte hue. "
-            "Use whenever the user asks to extract viral clips, highlights, or shorts from a video. "
+            "Use whenever the user asks to extract viral clips, highlights, or shorts from a video "
+            "THEY ALREADY HAVE OR LINKED. Requires an actual video_source — never guess or invent one. "
+            "Do NOT use this when the user wants a brand-new video created from just a topic/niche "
+            "with no source video (use start_tiktok_workflow for that instead). "
             "Say two short sentences before calling this tool (it is a slow tool) — result is spoken back automatically."
         ),
         "parameters": {

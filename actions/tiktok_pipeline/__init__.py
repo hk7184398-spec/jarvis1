@@ -1,3 +1,14 @@
+"""
+actions/tiktok_pipeline/ — TikTok Content Automation, V1 Stage 1.
+
+Creates a brand-new TikTok video concept from just a topic/niche (no
+existing video needed): analyzes the niche, writes a voiceover script,
+splits it into scene-by-scene image prompts, then stops for human
+approval. Does NOT yet generate video/animation/audio or publish —
+that's later stages. Different from cut_viral_clips, which extracts
+clips from an existing video the user already has.
+"""
+
 # actions/tiktok_pipeline/__init__.py
 #
 # Jarvis module: TikTok Content Automation — V1, Stage 1 only
@@ -27,19 +38,28 @@ TOOL_DECLARATIONS = [
     {
         "name": "start_tiktok_workflow",
         "description": (
-            "Starts a new TikTok content workflow for a given niche. "
-            "Analyzes the niche, writes a voiceover script, and splits it "
-            "into scene-by-scene image prompts. Always asks the user for "
-            "the niche first if they haven't given one — do not invent a "
-            "niche. Stops after generating the script and scenes for the "
-            "user's review; does NOT generate video or publish anything."
+            "Creates a brand-new TikTok video CONCEPT FROM SCRATCH, given only "
+            "a topic/niche — no existing video needed. Use this whenever the "
+            "user asks to 'banao'/'create'/'make' a new TikTok video about a "
+            "topic (e.g. 'tiktok video banao vegetables pe', 'funny animated "
+            "video banao cats pe'), NOT when the user gives an existing video "
+            "URL or file to cut clips from (that's cut_viral_clips instead). "
+            "This tool currently only completes Stage 1 of the pipeline: it "
+            "analyzes the niche, writes a voiceover script, and splits it "
+            "into scene-by-scene image prompts, then stops for the user's "
+            "review. It does NOT yet generate actual video, animation, images, "
+            "or audio, and does NOT publish anything — say so plainly if the "
+            "user asks for the finished video, rather than refusing the "
+            "request outright. Always call this tool immediately once a "
+            "niche/topic is given; don't ask clarifying questions first "
+            "unless no topic was given at all."
         ),
         "parameters": {
             "type": "OBJECT",
             "properties": {
                 "niche": {
                     "type": "STRING",
-                    "description": "The content niche for this video, e.g. 'personal finance tips', 'stoic philosophy quotes'"
+                    "description": "The content niche/topic for this video, e.g. 'personal finance tips', 'stoic philosophy quotes', 'funny vegetables'"
                 }
             },
             "required": ["niche"]

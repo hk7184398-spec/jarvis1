@@ -77,12 +77,16 @@ def _has_tool_declarations(py_path: Path) -> bool:
 
 
 def scan_modules() -> list:
-    """Actions/ aur agent/ ke andar har .py file ko scan karta hai."""
+    """Actions/ aur agent/ ke andar har .py file ko scan karta hai.
+    Ab package-style modules (ek subfolder jiske andar __init__.py ho,
+    jaise actions/tiktok_pipeline/) bhi detect karta hai — sirf flat
+    .py files tak limited nahi."""
     modules = []
     for folder in MODULE_DIRS:
         d = BASE_DIR / folder
         if not d.exists():
             continue
+
         for py in sorted(d.glob("*.py")):
             if py.name.startswith("_"):
                 continue
@@ -92,6 +96,20 @@ def scan_modules() -> list:
                 "functions": _top_level_defs(py),
                 "has_tools": _has_tool_declarations(py),
             })
+
+        for pkg_dir in sorted(p for p in d.iterdir() if p.is_dir()):
+            if pkg_dir.name.startswith("_") or pkg_dir.name == "__pycache__":
+                continue
+            init_py = pkg_dir / "__init__.py"
+            if not init_py.exists():
+                continue
+            modules.append({
+                "module":    f"{folder}/{pkg_dir.name}/",
+                "summary":   _first_docstring(init_py) or "(no docstring yet — is file mein docstring add karo taake routing behtar ho)",
+                "functions": _top_level_defs(init_py),
+                "has_tools": _has_tool_declarations(init_py),
+            })
+
     return modules
 
 

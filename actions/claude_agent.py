@@ -23,13 +23,14 @@ Wire-up (already done in main.py):
     - dispatch: elif name == "ask_claude": ...
 
 Requirements on the host machine:
-    - ANTHROPIC_API_KEY set in the environment
+    - `anthropic_api_key` set in config/api_keys.json (same file/pattern used
+      for gemini_api_key and openrouter_api_key — see core/config.py)
     - `pip install anthropic --break-system-packages` in the jarvis venv
       (also required by actions/website_builder.py — now listed in
       requirements.txt so both modules are covered by one install)
 """
 
-import os
+from core.config import get_api_key
 import anthropic
 
 MODEL = "claude-sonnet-4-6"
@@ -105,9 +106,9 @@ def ask_claude_action(parameters: dict, player=None) -> str:
         _log(msg, player)
         return msg
 
-    api_key = os.environ.get("ANTHROPIC_API_KEY")
+    api_key = get_api_key("anthropic_api_key", required=False)
     if not api_key:
-        msg = "Sir, ANTHROPIC_API_KEY environment variable set nahi hai."
+        msg = "Sir, 'anthropic_api_key' config/api_keys.json mein set nahi hai."
         _log(msg, player)
         return msg
 

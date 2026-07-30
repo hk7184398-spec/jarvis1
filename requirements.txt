@@ -1,4 +1,5 @@
 sounddevice
+edge-tts
 mcp
 anthropic
 google-genai

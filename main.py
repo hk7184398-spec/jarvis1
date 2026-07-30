@@ -36,7 +36,7 @@ from actions.website_builder   import build_website
 from actions.screen_recorder   import TOOL_DECLARATIONS as screen_recorder_tools
 from actions.screen_recorder   import start_recording, stop_recording, get_recording_status
 from actions.tiktok_pipeline   import TOOL_DECLARATIONS as tiktok_pipeline_tools
-from actions.tiktok_pipeline   import start_tiktok_workflow, get_tiktok_status
+from actions.tiktok_pipeline   import start_tiktok_workflow, get_tiktok_status, continue_tiktok_workflow
 from actions.claude_agent      import TOOL_DECLARATIONS as claude_agent_tools
 from actions.claude_agent      import ask_claude_action
 
@@ -803,6 +803,10 @@ class JarvisLive:
 
             elif name == "get_tiktok_status":
                 r = await loop.run_in_executor(None, lambda: get_tiktok_status(parameters=args, player=self.ui))
+                result = r or "Done."
+
+            elif name == "continue_tiktok_workflow":
+                r = await loop.run_in_executor(None, lambda: continue_tiktok_workflow(parameters=args, player=self.ui))
                 result = r or "Done."
 
             elif name == "read_project_doc":

@@ -170,6 +170,39 @@ _OS_LAUNCHERS = {
     "Linux":   _launch_linux,
 }
 
+# Apps where we know how to search-and-open a specific chat/contact
+# after the app itself has launched.
+_CHAT_CAPABLE_APPS = ("whatsapp", "telegram")
+
+
+def _open_specific_chat(app_key: str, chat_name: str) -> bool:
+    """
+    Searches for and opens a specific chat/contact inside a messaging app.
+    Does NOT type or send any message — only opens the conversation.
+    Works for both the desktop Electron app (Ctrl+F search shortcut) and
+    the browser-based version (Linux default), since both expose a
+    focusable search box that responds to Ctrl+F.
+    """
+    try:
+        import pyautogui
+        pyautogui.FAILSAFE = True
+        pyautogui.PAUSE = 0.08
+
+        time.sleep(1.8)  # let the app/page finish loading
+
+        pyautogui.hotkey("ctrl", "f")
+        time.sleep(0.4)
+        pyautogui.hotkey("ctrl", "a")
+        pyautogui.write(chat_name, interval=0.04)
+        time.sleep(0.9)
+        pyautogui.press("enter")
+        time.sleep(0.5)
+
+        return True
+    except Exception as e:
+        print(f"[open_app] ⚠️ Could not open chat '{chat_name}' in {app_key}: {e}")
+        return False
+
 
 def open_app(
     parameters=None,
@@ -177,7 +210,9 @@ def open_app(
     player=None,
     session_memory=None,
 ) -> str:
-    app_name = (parameters or {}).get("app_name", "").strip()
+    params    = parameters or {}
+    app_name  = params.get("app_name", "").strip()
+    chat_name = (params.get("chat_name") or "").strip()
 
     if not app_name:
         return "Please specify which application to open, sir."
@@ -194,21 +229,32 @@ def open_app(
     if player:
         player.write_log(f"[open_app] {app_name}")
 
+    app_key = app_name.lower().strip()
+    wants_chat = bool(chat_name) and any(k in app_key for k in _CHAT_CAPABLE_APPS)
+
     try:
         success = launcher(normalized)
 
-        if success:
-            return f"Opened {app_name} successfully, sir."
-
-        if normalized != app_name:
+        if not success and normalized != app_name:
             success = launcher(app_name)
-            if success:
-                return f"Opened {app_name} successfully, sir."
 
-        return (
-            f"I tried to open {app_name}, sir, but couldn't confirm it launched. "
-            f"It may still be loading or might not be installed."
-        )
+        if not success:
+            return (
+                f"I tried to open {app_name}, sir, but couldn't confirm it launched. "
+                f"It may still be loading or might not be installed."
+            )
+
+        if wants_chat:
+            if player:
+                player.write_log(f"[open_app] opening chat: {chat_name}")
+            if _open_specific_chat(app_key, chat_name):
+                return f"Opened {chat_name}'s chat in {app_name}, sir."
+            return (
+                f"Opened {app_name}, sir, but I couldn't confirm the chat with "
+                f"{chat_name} opened. You may need to search for it manually."
+            )
+
+        return f"Opened {app_name} successfully, sir."
 
     except Exception as e:
         print(f"[open_app] ❌ {e}")

@@ -97,9 +97,13 @@ TOOL_DECLARATIONS = [
     {
         "name": "open_app",
         "description": (
-            "Opens any application on the Windows computer. "
+            "Opens any application on the computer. "
             "Use this whenever the user asks to open, launch, or start any app, "
-            "website, or program. Always call this tool — never just say you opened it."
+            "website, or program. Always call this tool — never just say you opened it. "
+            "If the user asks to open a specific chat/contact inside a messaging app "
+            "(e.g. 'bhalu ki chat open karo', 'open my chat with Bhalu on WhatsApp'), "
+            "still call this tool with app_name set to the messaging app and also pass "
+            "chat_name set to the contact's name — do not just open the app generically."
         ),
         "parameters": {
             "type": "OBJECT",
@@ -107,6 +111,14 @@ TOOL_DECLARATIONS = [
                 "app_name": {
                     "type": "STRING",
                     "description": "Exact name of the application (e.g. 'WhatsApp', 'Chrome', 'Spotify')"
+                },
+                "chat_name": {
+                    "type": "STRING",
+                    "description": (
+                        "Optional. Name of the contact/chat to open directly inside a "
+                        "messaging app such as WhatsApp or Telegram (e.g. 'Bhalu'). "
+                        "Leave empty if the user just wants the app itself opened."
+                    )
                 }
             },
             "required": ["app_name"]

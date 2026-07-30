@@ -37,6 +37,8 @@ from actions.screen_recorder   import TOOL_DECLARATIONS as screen_recorder_tools
 from actions.screen_recorder   import start_recording, stop_recording, get_recording_status
 from actions.tiktok_pipeline   import TOOL_DECLARATIONS as tiktok_pipeline_tools
 from actions.tiktok_pipeline   import start_tiktok_workflow, get_tiktok_status
+from actions.claude_agent      import TOOL_DECLARATIONS as claude_agent_tools
+from actions.claude_agent      import ask_claude_action
 
 from core.skill_registry       import build_registry, prompt_block, read_doc
 from core.mcp_manager           import McpManager  # MCP INTEGRATION
@@ -552,6 +554,7 @@ TOOL_DECLARATIONS.append({
 TOOL_DECLARATIONS.extend(website_builder_tools)
 TOOL_DECLARATIONS.extend(screen_recorder_tools)
 TOOL_DECLARATIONS.extend(tiktok_pipeline_tools)
+TOOL_DECLARATIONS.extend(claude_agent_tools)
 
 
 class JarvisLive:
@@ -747,6 +750,10 @@ class JarvisLive:
 
             elif name == "web_search":
                 r = await loop.run_in_executor(None, lambda: web_search_action(parameters=args, player=self.ui))
+                result = r or "Done."
+
+            elif name == "ask_claude":
+                r = await loop.run_in_executor(None, lambda: ask_claude_action(parameters=args, player=self.ui))
                 result = r or "Done."
 
             elif self.mcp_manager.owns(name):  # MCP INTEGRATION

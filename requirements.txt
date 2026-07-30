@@ -1,5 +1,6 @@
 sounddevice
 mcp
+anthropic
 google-genai
 google-generativeai
 pillow

@@ -35,6 +35,11 @@ RULES:
 - build_website → ANY request to create/build/design a website, landing page, or web app.
   Call DIRECTLY via Lovable — never use dev_agent or code_helper for this, those build
   local code projects, not Lovable-hosted websites.
+- ask_claude → user explicitly says "Claude se pucho/poocho", "Claude ka opinion lo",
+  "Claude se baat karo", or asks for code review, code debugging, or deep written
+  analysis beyond a quick answer. Call DIRECTLY, pass the full task (and any code/error
+  text as context). Do NOT use ask_claude for real-time data (prices, weather, news,
+  current events) — Claude has no live data access; use web_search for that instead.
 - start_screen_recording / stop_screen_recording → ANY request to record the screen or
   start/stop a screencast. Do NOT confuse with screen_process, which only takes a single
   screenshot for AI analysis — it does not save a video file.

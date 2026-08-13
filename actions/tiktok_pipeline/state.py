@@ -21,9 +21,8 @@ from typing import Optional
 STATE_DIR = Path.home() / ".jarvis" / "tiktok_workflows"
 STATE_DIR.mkdir(parents=True, exist_ok=True)
 
-# Canonical stage sequence for the V1 pipeline. Later stages (video
-# assembly, SEO/hashtags, publish) get appended here as they're built —
-# the state file format doesn't need to change.
+# Canonical stage sequence for the V1 pipeline. Later stages get appended
+# here as they're built — the state file format doesn't need to change.
 STAGES = [
     "niche_input",
     "niche_analysis",
@@ -32,7 +31,12 @@ STAGES = [
     "awaiting_approval",     # human approval gate — nothing proceeds past here automatically
     "image_generation",      # Stage 2 — one image per scene
     "voiceover_generation",  # Stage 2 — full script TTS audio
-    "media_ready",           # second human gate — before video assembly (not yet built)
+    "media_ready",           # second human gate — before video assembly
+    "video_assembly",        # Stage 3 — ffmpeg slideshow + captions + audio mux
+    "seo_generation",        # Stage 4a — title/caption/hashtags
+    "ready_to_publish",      # third human gate — nothing gets uploaded/posted automatically
+    "publish_staged",        # Stage 4b — video uploaded + caption filled, NOT posted (default)
+    "published",             # Stage 4b — Post actually clicked (only if TIKTOK_AUTO_PUBLISH=true)
 ]
 
 

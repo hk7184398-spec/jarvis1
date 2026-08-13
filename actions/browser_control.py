@@ -430,6 +430,24 @@ class _BrowserThread:
         except Exception as e:
             return f"Key error: {e}"
 
+    async def _upload_file(self, selector: str, file_path: str) -> str:
+        """
+        Sets a file on an <input type="file"> element — used by the TikTok
+        publish-staging flow (Stage 4) to attach the assembled video without
+        needing the OS-native file picker dialog (which Playwright can't
+        drive directly). `selector` should target the file input itself;
+        on sites that hide it, `page.set_input_files` still works because it
+        doesn't require the input to be visible/clickable, only present.
+        """
+        page = await self._get_page()
+        try:
+            await page.set_input_files(selector, file_path, timeout=15000)
+            return f"Uploaded file to {selector}: {file_path}"
+        except PlaywrightTimeout:
+            return f"Timed out waiting for file input: {selector}"
+        except Exception as e:
+            return f"Upload error: {e}"
+
     async def _get_text(self) -> str:
         page = await self._get_page()
         try:
@@ -562,11 +580,12 @@ def browser_control(
 
     parameters:
         action      : go_to | search | click | type | scroll | fill_form |
-                      smart_click | smart_type | get_text | press | close
+                      smart_click | smart_type | get_text | press |
+                      upload_file | close
         url         : URL for go_to
         query       : search query
         engine      : google | bing | duckduckgo (default: google)
-        selector    : CSS selector for click/type
+        selector    : CSS selector for click/type/upload_file
         text        : text to click or type
         description : element description for smart_click/smart_type
         direction   : up | down for scroll
@@ -574,6 +593,7 @@ def browser_control(
         key         : key name for press (e.g. Enter, Escape, Tab)
         fields      : {selector: value} dict for fill_form
         clear_first : bool, clear input before typing (default: True)
+        file_path   : absolute path to the file for upload_file
     """
     _ensure_started()
 
@@ -626,6 +646,12 @@ def browser_control(
 
         elif action == "press":
             result = _bt.run(_bt._press(parameters.get("key", "Enter")))
+
+        elif action == "upload_file":
+            result = _bt.run(_bt._upload_file(
+                parameters.get("selector", ""),
+                parameters.get("file_path", ""),
+            ), timeout=60)
 
         elif action == "close":
             result = _bt.run(_bt._close_browser())

@@ -1,5 +1,5 @@
 """
-actions/tiktok_pipeline/ — TikTok Content Automation, V1 Stages 1-2.
+actions/tiktok_pipeline/ — TikTok Content Automation, V1 Stages 1-4 (full pipeline).
 
 Stage 1: creates a brand-new TikTok video concept from just a topic/niche
 (no existing video needed) — analyzes the niche, writes a voiceover script,
@@ -7,7 +7,18 @@ splits it into scene-by-scene image prompts, then stops for human approval.
 
 Stage 2 (continue_tiktok_workflow, only after explicit approval): generates
 one image per scene and a full voice-over audio file, then stops again at a
-second gate before video assembly (Stage 3, not yet built).
+second gate before video assembly.
+
+Stage 3 + 4a (finalize_tiktok_video, only after explicit approval): assembles
+the final vertical video (ffmpeg slideshow + captions + audio mux) and
+generates SEO metadata (title/caption/hashtags), then stops at a THIRD gate
+before anything is uploaded/posted anywhere.
+
+Stage 4b (publish_tiktok_video, only after explicit approval of the exact
+caption/hashtags): stages the video for posting via browser automation
+(TikTok's Content Posting API needs app review, so this is the default
+path — see stage4_publish.py). Never actually clicks "Post" unless
+TIKTOK_AUTO_PUBLISH=true is set in .env.
 
 Different from cut_viral_clips, which extracts clips from an existing video
 the user already has.
@@ -15,14 +26,18 @@ the user already has.
 
 # actions/tiktok_pipeline/__init__.py
 #
-# Jarvis module: TikTok Content Automation — V1, Stages 1-2 only
+# Jarvis module: TikTok Content Automation — V1, full pipeline
 # (niche -> analysis -> script -> scene prompts -> [human approval] ->
-# scene images -> voice-over -> [human approval] -> STOP. Video assembly,
-# SEO/hashtags, and publish are later stages, not yet built).
+# scene images -> voice-over -> [human approval] -> video assembly ->
+# SEO metadata -> [human approval] -> publish-staging (draft by default) ->
+# [publish only if TIKTOK_AUTO_PUBLISH=true]).
 #
 # Wire-up (in main.py):
 #   from actions.tiktok_pipeline import TOOL_DECLARATIONS as tiktok_tools
-#   from actions.tiktok_pipeline import start_tiktok_workflow, get_tiktok_status, continue_tiktok_workflow
+#   from actions.tiktok_pipeline import (
+#       start_tiktok_workflow, get_tiktok_status, continue_tiktok_workflow,
+#       finalize_tiktok_video, publish_tiktok_video,
+#   )
 #   TOOL_DECLARATIONS.extend(tiktok_tools)
 #   ...
 #   elif name == "start_tiktok_workflow":
@@ -31,16 +46,27 @@ the user already has.
 #       r = await loop.run_in_executor(None, lambda: get_tiktok_status(parameters=args, player=self.ui))
 #   elif name == "continue_tiktok_workflow":
 #       r = await loop.run_in_executor(None, lambda: continue_tiktok_workflow(parameters=args, player=self.ui))
+#   elif name == "finalize_tiktok_video":
+#       r = await loop.run_in_executor(None, lambda: finalize_tiktok_video(parameters=args, player=self.ui))
+#   elif name == "publish_tiktok_video":
+#       r = await loop.run_in_executor(None, lambda: publish_tiktok_video(parameters=args, player=self.ui))
 #
 # Architecture note: this module NEVER auto-proceeds past a human approval
-# gate. The workflow sits at "awaiting_approval" (after Stage 1) or
-# "media_ready" (after Stage 2) until the user explicitly confirms —
-# matching Jarvis's "no confirmation without verified success, no publish
-# without human approval" rule.
+# gate. The workflow sits at "awaiting_approval" (after Stage 1),
+# "media_ready" (after Stage 2), or "ready_to_publish" (after Stage 3/4a)
+# until the user explicitly confirms — matching Jarvis's "no confirmation
+# without verified success, no publish without human approval" rule. Even
+# with TIKTOK_AUTO_PUBLISH=true, publish_tiktok_video() still requires an
+# explicit call after the user has seen the caption/hashtags (per
+# JARVIS_SKILLS_MASTER_PROMPT.md section 10.4 — auto-publish mode still
+# needs the caption confirmed, it only skips the *second* manual "click
+# Post yourself" step).
 
 from actions.tiktok_pipeline import state
 from actions.tiktok_pipeline.stage1_niche_script import run_stage1
 from actions.tiktok_pipeline.stage2_media import generate_scene_images, generate_voiceover, DEFAULT_VOICE
+from actions.tiktok_pipeline.stage3_assembly import assemble_video
+from actions.tiktok_pipeline.stage4_publish import generate_seo, stage_for_publish
 
 TOOL_DECLARATIONS = [
     {
@@ -116,6 +142,72 @@ TOOL_DECLARATIONS = [
                 "voice": {
                     "type": "STRING",
                     "description": "Optional edge-tts voice name, e.g. 'en-US-GuyNeural', 'en-US-JennyNeural'. Defaults to a natural US English voice."
+                }
+            },
+            "required": []
+        }
+    },
+    {
+        "name": "finalize_tiktok_video",
+        "description": (
+            "Approves a TikTok workflow's Stage 2 media (scene images + "
+            "voice-over) and proceeds to Stage 3+4a: assembles the final "
+            "vertical video with ffmpeg (scene images timed to the "
+            "voice-over, burned-in captions, audio muxed in) and generates "
+            "SEO metadata (title, caption, hashtags). ONLY call this when "
+            "the user EXPLICITLY approves the media from "
+            "continue_tiktok_workflow (e.g. 'media theek hai, video bana "
+            "do', 'approved, finalize karo'). Never call automatically "
+            "right after continue_tiktok_workflow. Does NOT upload or post "
+            "anything — stops at a third approval gate before "
+            "publish_tiktok_video can be called."
+        ),
+        "parameters": {
+            "type": "OBJECT",
+            "properties": {
+                "workflow_id": {
+                    "type": "STRING",
+                    "description": "Optional. The workflow ID to finalize. Omit to use the most recent workflow."
+                },
+                "burn_captions": {
+                    "type": "BOOLEAN",
+                    "description": "Whether to burn narration captions into the video. Defaults to true."
+                }
+            },
+            "required": []
+        }
+    },
+    {
+        "name": "publish_tiktok_video",
+        "description": (
+            "Stages the finalized TikTok video for posting: opens TikTok's "
+            "upload page in the browser, uploads the video, and fills the "
+            "caption/hashtags. Does NOT click the final 'Post' button "
+            "unless TIKTOK_AUTO_PUBLISH=true is set in .env — by default "
+            "it stops with the post staged in the browser for the user to "
+            "review and publish manually. ONLY call this when the user "
+            "EXPLICITLY approves the exact title/caption/hashtags shown by "
+            "finalize_tiktok_video (e.g. 'caption theek hai, publish kar "
+            "do', 'ye hashtags use karo aur post karo'). If the user wants "
+            "to change the caption or hashtags first, pass the edited "
+            "values — do not silently use the AI-generated ones after the "
+            "user asked for changes."
+        ),
+        "parameters": {
+            "type": "OBJECT",
+            "properties": {
+                "workflow_id": {
+                    "type": "STRING",
+                    "description": "Optional. The workflow ID to publish. Omit to use the most recent workflow."
+                },
+                "caption": {
+                    "type": "STRING",
+                    "description": "Optional. Overrides the AI-generated caption with user-edited text."
+                },
+                "hashtags": {
+                    "type": "ARRAY",
+                    "items": {"type": "STRING"},
+                    "description": "Optional. Overrides the AI-generated hashtags (without # symbols) with a user-edited list."
                 }
             },
             "required": []
@@ -236,13 +328,131 @@ def continue_tiktok_workflow(parameters=None, response=None, player=None, sessio
         return (
             f"Media ready for workflow {wf['workflow_id']}, sir — "
             f"{len(image_result['results'])} scene images and the voice-over "
-            f"are saved. Waiting for your review before video assembly, "
-            f"which isn't built yet."
+            f"are saved. Waiting for your review — call finalize_tiktok_video "
+            f"once you approve, to assemble the final video."
         )
 
     except Exception as e:
         state.mark_failed(wf, str(e))
         return (
             f"Stage 2 crashed for workflow {wf['workflow_id']}, sir: {e}. "
+            f"Marked as failed, not silently retried."
+        )
+
+
+def finalize_tiktok_video(parameters=None, response=None, player=None, session_memory=None) -> str:
+    """Stage 3+4a dispatcher: runs ONLY after explicit human approval of
+    Stage 2's media. Assembles the final video, then generates SEO
+    metadata — advancing state after each verified success, stopping at
+    the FIRST failure without silently proceeding."""
+    params        = parameters or {}
+    workflow_id   = params.get("workflow_id", "").strip()
+    burn_captions = params.get("burn_captions", True)
+
+    wf = state.load(workflow_id) if workflow_id else state.latest()
+
+    if wf is None:
+        return "No TikTok workflow found to finalize, sir." if not workflow_id else f"No workflow found with ID {workflow_id}, sir."
+
+    if wf["stage"] != "media_ready":
+        return (
+            f"Workflow {wf['workflow_id']} is at stage '{wf['stage']}', not "
+            f"media_ready — nothing to finalize right now, sir."
+        )
+
+    scenes = wf["data"].get("scene_prompts", {}).get("scenes", [])
+    script = wf["data"].get("script_generation", {}).get("script", "")
+    niche  = wf.get("niche", "")
+
+    if player:
+        player.write_log(f"[TikTok] Assembling final video for workflow {wf['workflow_id']}")
+
+    try:
+        assembly_result = assemble_video(wf["workflow_id"], scenes, burn_captions=burn_captions)
+        if not assembly_result["success"]:
+            state.mark_failed(wf, f"Video assembly failed: {assembly_result['error']}")
+            return (
+                f"Video assembly failed for workflow {wf['workflow_id']}, sir: "
+                f"{assembly_result['error']}. Marked as failed, not silently retried."
+            )
+        state.advance(wf, "video_assembly", {"video_path": assembly_result["path"], "duration": assembly_result["duration"]})
+
+        seo = generate_seo(niche, script)
+        state.advance(wf, "seo_generation", {"seo": seo})
+        state.advance(wf, "ready_to_publish")
+
+        if player:
+            player.write_log(f"[TikTok] Workflow {wf['workflow_id']} ready to publish")
+
+        hashtags_preview = ", ".join(f"#{h}" for h in seo.get("hashtags", []))
+
+        return (
+            f"Final video assembled for workflow {wf['workflow_id']}, sir — "
+            f"saved at {assembly_result['path']} ({assembly_result['duration']:.1f}s). "
+            f"Suggested title: \"{seo.get('title', '')}\". "
+            f"Suggested caption: \"{seo.get('caption', '')}\". "
+            f"Suggested hashtags: {hashtags_preview}. "
+            f"Nothing has been uploaded or posted — call publish_tiktok_video once "
+            f"you approve this caption/hashtags (or give me edited ones)."
+        )
+
+    except Exception as e:
+        state.mark_failed(wf, str(e))
+        return (
+            f"Stage 3/4a crashed for workflow {wf['workflow_id']}, sir: {e}. "
+            f"Marked as failed, not silently retried."
+        )
+
+
+def publish_tiktok_video(parameters=None, response=None, player=None, session_memory=None) -> str:
+    """Stage 4b dispatcher: runs ONLY after explicit human approval of the
+    exact caption/hashtags. Stages the video for posting via browser
+    automation and, by default, stops short of the final Post click (see
+    stage4_publish.stage_for_publish for the TIKTOK_AUTO_PUBLISH guardrail)."""
+    params      = parameters or {}
+    workflow_id = params.get("workflow_id", "").strip()
+    override_caption  = params.get("caption")
+    override_hashtags = params.get("hashtags")
+
+    wf = state.load(workflow_id) if workflow_id else state.latest()
+
+    if wf is None:
+        return "No TikTok workflow found to publish, sir." if not workflow_id else f"No workflow found with ID {workflow_id}, sir."
+
+    if wf["stage"] not in ("ready_to_publish", "publish_staged"):
+        return (
+            f"Workflow {wf['workflow_id']} is at stage '{wf['stage']}', not "
+            f"ready_to_publish — call finalize_tiktok_video first, sir."
+        )
+
+    video_path = wf["data"].get("video_assembly", {}).get("video_path", "")
+    seo        = wf["data"].get("seo_generation", {}).get("seo", {})
+    caption    = override_caption if override_caption is not None else seo.get("caption", "")
+    hashtags   = override_hashtags if override_hashtags is not None else seo.get("hashtags", [])
+
+    if not video_path:
+        return f"No assembled video found for workflow {wf['workflow_id']}, sir — finalize_tiktok_video must complete first."
+
+    if player:
+        player.write_log(f"[TikTok] Staging publish for workflow {wf['workflow_id']}")
+
+    try:
+        result = stage_for_publish(wf["workflow_id"], video_path, caption, hashtags)
+        if not result["success"]:
+            return f"Publish staging failed for workflow {wf['workflow_id']}, sir: {result['error']}"
+
+        state.advance(wf, "published" if result["published"] else "publish_staged", {
+            "caption": caption, "hashtags": hashtags, "published": result["published"],
+        })
+
+        if player:
+            player.write_log(f"[TikTok] Workflow {wf['workflow_id']}: {result['message']}")
+
+        return f"{result['message']} (workflow {wf['workflow_id']})"
+
+    except Exception as e:
+        state.mark_failed(wf, str(e))
+        return (
+            f"Stage 4b crashed for workflow {wf['workflow_id']}, sir: {e}. "
             f"Marked as failed, not silently retried."
         )

@@ -1,0 +1,15 @@
+{
+  "gdrive_folder_id": "<< PASTE YOUR GOOGLE DRIVE FOLDER LINK / ID HERE >>",
+  "gdrive_service_account_path": "config/gdrive_service_account.json",
+  "poll_interval_seconds": 300,
+  "delay_between_posts_seconds": 60,
+  "max_retries": 2,
+  "video_max_duration_seconds": 30,
+  "folder_mode": "auto",
+  "status_tab_x": null,
+  "status_tab_y": null,
+  "add_status_x": null,
+  "add_status_y": null,
+  "caption_box_x": null,
+  "caption_box_y": null
+}

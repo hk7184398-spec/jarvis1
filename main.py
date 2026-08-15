@@ -6,7 +6,7 @@ import sounddevice as sd
 from google.genai import types
 from core.config import get_gemini_key
 from core.gemini import get_genai_client
-from core.paths import PROMPT_PATH
+from core.paths import PROMPT_PATH, BASE_DIR
 from ui import JarvisUI
 from memory.memory_manager import (
     load_memory, update_memory, format_memory_for_prompt,
@@ -43,6 +43,14 @@ from actions.tiktok_pipeline   import (
 )
 from actions.claude_agent      import TOOL_DECLARATIONS as claude_agent_tools
 from actions.claude_agent      import ask_claude_action
+from actions.gdrive_status_poster import TOOL_DECLARATIONS as gdrive_status_tools
+from actions.gdrive_status_poster import (
+    start_watch as gdrive_status_start,
+    stop_watch as gdrive_status_stop,
+    trigger_poll_now as gdrive_status_now,
+    get_watch_status as gdrive_status_status,
+    autostart_if_enabled as gdrive_status_autostart_if_enabled,
+)
 
 from core.skill_registry       import build_registry, prompt_block, read_doc
 from core.mcp_manager           import McpManager  # MCP INTEGRATION
@@ -582,6 +590,7 @@ TOOL_DECLARATIONS.extend(website_builder_tools)
 TOOL_DECLARATIONS.extend(screen_recorder_tools)
 TOOL_DECLARATIONS.extend(tiktok_pipeline_tools)
 TOOL_DECLARATIONS.extend(claude_agent_tools)
+TOOL_DECLARATIONS.extend(gdrive_status_tools)
 
 
 class JarvisLive:
@@ -852,6 +861,22 @@ class JarvisLive:
                 r = await loop.run_in_executor(None, lambda: publish_tiktok_video(parameters=args, player=self.ui))
                 result = r or "Done."
 
+            elif name == "gdrive_status_start":
+                r = await loop.run_in_executor(None, lambda: gdrive_status_start(parameters=args, player=self.ui))
+                result = r or "Started."
+
+            elif name == "gdrive_status_stop":
+                r = await loop.run_in_executor(None, lambda: gdrive_status_stop(parameters=args, player=self.ui))
+                result = r or "Stopped."
+
+            elif name == "gdrive_status_now":
+                r = await loop.run_in_executor(None, lambda: gdrive_status_now(parameters=args, player=self.ui))
+                result = r or "Checked."
+
+            elif name == "gdrive_status_status":
+                r = await loop.run_in_executor(None, lambda: gdrive_status_status(parameters=args, player=self.ui))
+                result = r or "Done."
+
             elif name == "read_project_doc":
                 r = await loop.run_in_executor(None, lambda: read_doc(args.get("doc_name", "")))
                 result = r or "Doc not found."
@@ -1045,6 +1070,10 @@ class JarvisLive:
 
 def main():
     ui = JarvisUI(str(BASE_DIR / "face.png"))
+
+    # Resumes Google Drive -> WhatsApp Status monitoring silently if it was
+    # already approved in a previous session. Never asks permission again.
+    gdrive_status_autostart_if_enabled()
 
     def runner():
         ui.wait_for_api_key()

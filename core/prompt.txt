@@ -61,3 +61,13 @@ TOOL SELECTION:
   multiple tools (e.g. "research X and save to file", "create a project").
 - Simple rule: if it can be done in ONE action → computer_settings. 
   If it needs 3+ steps across different tools → agent_task.
+- gdrive_status_start → user asks to begin auto-posting new Google Drive
+  products to WhatsApp Status ("naya data drive pe status pe automatically
+  lagao"). This is a ONE-TIME approval — once started it keeps running in
+  the background across restarts. NEVER ask this permission again after
+  the first successful start; only gdrive_status_stop turns it off.
+- gdrive_status_now → user wants an immediate check ("abhi check karo",
+  "naya data daala hai status pe laga do"), instead of waiting for the
+  next automatic background poll.
+- gdrive_status_status → questions like "kitne products post ho chuke
+  hain", "status monitoring on hai kya".

@@ -33,6 +33,7 @@ from actions.game_updater      import game_updater
 from actions.viral_clipper     import jarvis_tool_cut_viral_clips
 from actions.website_builder   import TOOL_DECLARATIONS as website_builder_tools
 from actions.website_builder   import build_website
+from actions.facebook_poster   import facebook_post
 from actions.screen_recorder   import TOOL_DECLARATIONS as screen_recorder_tools
 from actions.screen_recorder   import start_recording, stop_recording, get_recording_status
 from actions.tiktok_pipeline   import TOOL_DECLARATIONS as tiktok_pipeline_tools
@@ -168,6 +169,29 @@ TOOL_DECLARATIONS = [
                 "platform":     {"type": "STRING", "description": "Platform: WhatsApp, Telegram, etc."}
             },
             "required": ["receiver", "message_text", "platform"]
+        }
+    },
+    {
+        "name": "facebook_post",
+        "description": (
+            "Publishes a photo or video post to a Facebook Page via the Meta Graph API. "
+            "ALWAYS use this for any Facebook Page posting request — NEVER route Facebook "
+            "posting through agent_task or browser_control, since only this tool verifies "
+            "a real post_id from the API before reporting success. "
+            "Requires an actual local media file path — never invent or guess one; ask the "
+            "user for the file/Drive location if it wasn't given."
+        ),
+        "parameters": {
+            "type": "OBJECT",
+            "properties": {
+                "media_path":     {"type": "STRING",  "description": "Local path to the photo or video file to post"},
+                "caption":        {"type": "STRING",  "description": "Post caption/description. Omit to auto-generate."},
+                "page_id":        {"type": "STRING",  "description": "Facebook Page ID. Omit to use the configured default Page."},
+                "scheduled_time": {"type": "STRING",  "description": "ISO 8601 timestamp to schedule the post. Omit to publish immediately."},
+                "context":        {"type": "STRING",  "description": "Short context about the media, used only if auto-generating the caption"},
+                "force":          {"type": "BOOLEAN", "description": "Bypass the duplicate-post check (default: false)"},
+            },
+            "required": ["media_path"]
         }
     },
     {
@@ -695,6 +719,14 @@ class JarvisLive:
             elif name == "send_message":
                 r = await loop.run_in_executor(None, lambda: send_message(parameters=args, response=None, player=self.ui, session_memory=None))
                 result = r or f"Message sent to {args.get('receiver')}."
+
+            elif name == "facebook_post":
+                # Verified-execution tool: facebook_post() itself returns the
+                # true outcome (success with post_id, or a specific failure
+                # reason) — never overridden with a generic fallback string.
+                result = await loop.run_in_executor(
+                    None, lambda: facebook_post(parameters=args, player=self.ui, speak=self.speak)
+                )
 
             elif name == "reminder":
                 r = await loop.run_in_executor(None, lambda: reminder(parameters=args, response=None, player=self.ui))

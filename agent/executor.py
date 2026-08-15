@@ -191,6 +191,12 @@ def _call_tool(tool: str, parameters: dict, speak: Callable | None) -> str:
         from actions.send_message import send_message
         return send_message(parameters=parameters, player=None) or "Done."
 
+    elif tool == "facebook_post":
+        from actions.facebook_poster import facebook_post
+        # No "or 'Done.'" fallback here on purpose — facebook_post() itself
+        # returns the true, verified outcome (post_id or failure reason).
+        return facebook_post(parameters=parameters, player=None, speak=speak)
+
     elif tool == "reminder":
         from actions.reminder import reminder
         return reminder(parameters=parameters, player=None) or "Done."

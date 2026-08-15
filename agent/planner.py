@@ -73,6 +73,15 @@ send_message
   message_text: string (required)
   platform: string (required)
 
+facebook_post
+  media_path: string (required) — local path to the photo/video file to post
+  caption: string (optional) — auto-generated if omitted
+  page_id: string (optional) — defaults to the configured Page
+  scheduled_time: string (optional) — ISO 8601 timestamp; omit for immediate publish
+  force: boolean (optional)
+  NEVER use browser_control or generated_code for posting to a Facebook Page —
+  always use facebook_post so success is verified against a real post_id.
+
 reminder
   date: string YYYY-MM-DD (required)
   time: string HH:MM (required)
@@ -135,6 +144,11 @@ Goal: "Update all my Steam games"
 Steps:
 
 game_updater | action: update, platform: steam
+
+Goal: "Post the video at C:/Videos/promo.mp4 to the Velmora Facebook page"
+Steps:
+
+facebook_post | media_path: "C:/Videos/promo.mp4", page_id: "Velmora"
 
 Goal: "Send John a message on WhatsApp saying there is a meeting tomorrow"
 Steps:

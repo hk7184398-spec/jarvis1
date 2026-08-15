@@ -72,6 +72,22 @@ def get_openrouter_key(required: bool = True) -> str:
     return get_api_key("openrouter_api_key", required)
 
 
+def get_facebook_page_id(required: bool = True) -> str:
+    return get_api_key("fb_page_id", required)
+
+
+def get_facebook_page_access_token(required: bool = True) -> str:
+    return get_api_key("fb_page_access_token", required)
+
+
+def get_facebook_app_id(required: bool = False) -> str:
+    return get_api_key("fb_app_id", required)
+
+
+def get_facebook_app_secret(required: bool = False) -> str:
+    return get_api_key("fb_app_secret", required)
+
+
 def get_os() -> str:
     """Returns: 'windows' | 'mac' | 'linux'"""
     return str(load_config().get("os_system", "windows")).lower()

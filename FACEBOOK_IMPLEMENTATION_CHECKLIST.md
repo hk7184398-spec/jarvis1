@@ -1,5 +1,18 @@
 # Facebook Posting Implementation Checklist for Jarvis1
 
+> **Status update (2026-08):** `facebook_poster.py`'s `facebook_post()` was already
+> correctly implemented with `post_type`/`text_content` support and verified-execution
+> reporting, but `main.py`'s `TOOL_DECLARATIONS` entry for `facebook_post` was never
+> updated to match — it only exposed `media_path` (required), with no `post_type` or
+> `text_content` field. That meant Gemini had no valid way to call this tool for a
+> text-only post, and would answer conversationally without calling it at all —
+> which is why JARVIS reported posts as successful when nothing was ever posted.
+> Fixed in `main.py`'s `TOOL_DECLARATIONS` and `core/prompt.txt`'s routing rules.
+> The `_ask_post_type()`/`_ask_text_content()`/`_ask_media_path()` interactive
+> fallbacks below (Phase 2/4) also used blocking `input()`, which never gets an
+> answer in the real async voice/GUI flow — they've been made non-blocking, and
+> now report a clear failure instead of hanging or silently proceeding.
+
 ## ✅ Completion Roadmap
 
 ### Phase 1: Setup & Configuration (One-time)

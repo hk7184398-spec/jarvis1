@@ -182,24 +182,33 @@ TOOL_DECLARATIONS = [
     {
         "name": "facebook_post",
         "description": (
-            "Publishes a photo or video post to a Facebook Page via the Meta Graph API. "
-            "ALWAYS use this for any Facebook Page posting request — NEVER route Facebook "
-            "posting through agent_task or browser_control, since only this tool verifies "
-            "a real post_id from the API before reporting success. "
-            "Requires an actual local media file path — never invent or guess one; ask the "
-            "user for the file/Drive location if it wasn't given."
+            "Publishes a post to a Facebook Page via the Meta Graph API — text-only, "
+            "photo, or video. ALWAYS use this for any Facebook Page posting request "
+            "(text or media) — NEVER route Facebook posting through agent_task or "
+            "browser_control, since only this tool verifies a real post_id from the API "
+            "before reporting success. NEVER tell the user a post succeeded (or is in "
+            "progress) without having actually called this tool and read its returned "
+            "result — the returned string is the ONLY source of truth for success/failure. "
+            "For a text-only post, set post_type='text' and text_content to the exact "
+            "wording the user gave; no media_path is needed. For a photo/video post, set "
+            "post_type='photo' or 'video' and media_path to an actual local file path — "
+            "never invent or guess one; ask the user for the file/Drive location first if "
+            "it wasn't given, and only call this tool once you have it."
         ),
         "parameters": {
             "type": "OBJECT",
             "properties": {
-                "media_path":     {"type": "STRING",  "description": "Local path to the photo or video file to post"},
+                "post_type":      {"type": "STRING",  "description": "'text', 'photo', or 'video'. Required — infer from the request (no file mentioned = 'text')."},
+                "text_content":   {"type": "STRING",  "description": "The exact text to post. Required when post_type is 'text'."},
+                "media_path":     {"type": "STRING",  "description": "Local path to the photo or video file to post. Required when post_type is 'photo' or 'video'."},
+                "page_name":      {"type": "STRING",  "description": "Facebook Page display name mentioned by the user, e.g. 'Velmora'. Used for the spoken confirmation."},
                 "caption":        {"type": "STRING",  "description": "Post caption/description. Omit to auto-generate."},
                 "page_id":        {"type": "STRING",  "description": "Facebook Page ID. Omit to use the configured default Page."},
                 "scheduled_time": {"type": "STRING",  "description": "ISO 8601 timestamp to schedule the post. Omit to publish immediately."},
                 "context":        {"type": "STRING",  "description": "Short context about the media, used only if auto-generating the caption"},
                 "force":          {"type": "BOOLEAN", "description": "Bypass the duplicate-post check (default: false)"},
             },
-            "required": ["media_path"]
+            "required": ["post_type"]
         }
     },
     {

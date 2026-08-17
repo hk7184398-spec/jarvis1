@@ -2,6 +2,14 @@ sounddevice
 edge-tts
 mcp
 anthropic
+selenium
+PyQt6
+pdfplumber
+PyPDF2
+pandas
+openpyxl
+soundfile
+yt-dlp
 google-genai
 google-generativeai
 pillow

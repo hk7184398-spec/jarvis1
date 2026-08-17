@@ -338,54 +338,64 @@ def _post_via_browser(
 # --------------------------------------------------------------------------- #
 
 def _ask_post_type(speak=None, player=None) -> str:
-    """Ask user: text, photo, or video post?"""
+    """
+    The caller (JARVIS's tool-calling loop) has no interactive terminal —
+    it's a background executor thread inside an async voice/GUI session, so
+    blocking on input() here would either hang forever or raise EOFError
+    with no attached stdin. Instead, this speaks/logs the missing-info
+    prompt and returns "" immediately; facebook_post() then reports a
+    clear failure asking the user to re-say the request with the post
+    type, rather than silently hanging or crashing.
+    """
     msg = "Sir, کیا آپ text post کریں گے، photo post، یا video post؟ Kahiye: text, photo, یا video."
     if speak:
         try:
             speak(msg)
-        except:
-            pass
+        except Exception as e:
+            print(f"[FacebookPoster] ⚠️ Could not speak prompt: {e}")
     if player:
         try:
             player.write_log(f"JARVIS: {msg}")
-        except:
-            pass
-    print(f"\n[JARVIS] {msg}")
-    return input("Enter type (text/photo/video): ").lower().strip()
+        except Exception as e:
+            print(f"[FacebookPoster] ⚠️ Could not write to UI log: {e}")
+    print(f"[FacebookPoster] {msg}")
+    return ""
 
 
 def _ask_text_content(speak=None, player=None) -> str:
-    """Ask user: what text to post?"""
+    """See _ask_post_type — non-blocking; returns "" so the caller reports
+    a failure instead of hanging on stdin that nothing will ever write to."""
     msg = "Sir, براہ کرم وہ متن لکھیں جو آپ post کرنا چاہتے ہیں۔ Please provide the text content."
     if speak:
         try:
             speak(msg)
-        except:
-            pass
+        except Exception as e:
+            print(f"[FacebookPoster] ⚠️ Could not speak prompt: {e}")
     if player:
         try:
             player.write_log(f"JARVIS: {msg}")
-        except:
-            pass
-    print(f"\n[JARVIS] {msg}")
-    return input("Enter text: ").strip()
+        except Exception as e:
+            print(f"[FacebookPoster] ⚠️ Could not write to UI log: {e}")
+    print(f"[FacebookPoster] {msg}")
+    return ""
 
 
 def _ask_media_path(post_type: str, speak=None, player=None) -> Optional[str]:
-    """Ask user: provide photo/video file path."""
+    """See _ask_post_type — non-blocking; returns None so the caller reports
+    a failure instead of hanging on stdin that nothing will ever write to."""
     msg = f"Sir, براہ کرم اپنی {post_type} file کا path فراہم کریں۔ Please provide the file path."
     if speak:
         try:
             speak(msg)
-        except:
-            pass
+        except Exception as e:
+            print(f"[FacebookPoster] ⚠️ Could not speak prompt: {e}")
     if player:
         try:
             player.write_log(f"JARVIS: {msg}")
-        except:
-            pass
-    print(f"\n[JARVIS] {msg}")
-    return input("Enter file path: ").strip()
+        except Exception as e:
+            print(f"[FacebookPoster] ⚠️ Could not write to UI log: {e}")
+    print(f"[FacebookPoster] {msg}")
+    return None
 
 
 # --------------------------------------------------------------------------- #
@@ -450,7 +460,13 @@ def facebook_post(parameters: dict, player=None, speak=None) -> str:
         text_content = parameters.get("text_content", "").strip()
         if not text_content:
             text_content = _ask_text_content(speak, player)
-        
+
+        if not text_content:
+            return _report(
+                "Sir, مجھے وہ متن نہیں ملا جو آپ post کرنا چاہتے ہیں۔ "
+                "I didn't get the text you want posted — please say the exact wording again."
+            )
+
         caption = parameters.get("caption") or _generate_caption(
             context=page_name,
             user_text=text_content
@@ -461,7 +477,13 @@ def facebook_post(parameters: dict, player=None, speak=None) -> str:
         media_path_raw = parameters.get("media_path")
         if not media_path_raw:
             media_path_raw = _ask_media_path(post_type, speak, player)
-        
+
+        if not media_path_raw:
+            return _report(
+                f"Sir, مجھے {post_type} فائل کا path نہیں ملا۔ "
+                f"I didn't get a file path for the {post_type} post — please give me the file location."
+            )
+
         media_path = Path(media_path_raw).expanduser()
         
         if not media_path.exists() or not media_path.is_file():

@@ -1,16 +1,14 @@
 config/api_keys.json
-config/api_keys.json
-config/api_keys.json
-config/api_keys.json
-config/api_keys.json
-config/api_keys.json
-config/api_keys.json
 
 # testing artifacts
 .coverage
 htmlcov/
 .pytest_cache/
 __pycache__/
+*.pyc
+*.bak
+*.db
+.obsidian/
 TikTok_Automation_Project/.env
 TikTok_Automation_Project/.browser_profile/
 TikTok_Automation_Project/screenshots/

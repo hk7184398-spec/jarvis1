@@ -47,8 +47,9 @@ def test_save_memory_creates_parent_directory(memory_path):
     assert json.loads(memory_path.read_text(encoding="utf-8"))["identity"]["name"]["value"] == "Ali"
 
 
-def test_save_memory_ignores_non_dict(memory_path):
-    mm.save_memory("not a dict")
+def test_save_memory_rejects_non_dict(memory_path):
+    with pytest.raises(TypeError, match="save_memory expects a dict"):
+        mm.save_memory("not a dict")
     assert not memory_path.exists()
 
 

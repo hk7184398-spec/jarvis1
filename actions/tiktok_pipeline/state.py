@@ -76,18 +76,26 @@ def load(workflow_id: str) -> Optional[dict]:
     path = _path_for(workflow_id)
     if not path.exists():
         return None
-    with open(path, "r", encoding="utf-8") as f:
-        return json.load(f)
+    try:
+        with open(path, "r", encoding="utf-8") as f:
+            return json.load(f)
+    except (json.JSONDecodeError, UnicodeDecodeError, OSError) as e:
+        print(f"[tiktok_pipeline] ⚠️ Could not read workflow state {path.name}: {e}")
+        return None
 
 
 def latest() -> Optional[dict]:
     """Returns the most recently updated workflow, if any — used when the
     user says 'what's the status' without naming a workflow id."""
     files = sorted(STATE_DIR.glob("*.json"), key=lambda p: p.stat().st_mtime, reverse=True)
-    if not files:
-        return None
-    with open(files[0], "r", encoding="utf-8") as f:
-        return json.load(f)
+    for path in files:
+        try:
+            with open(path, "r", encoding="utf-8") as f:
+                return json.load(f)
+        except (json.JSONDecodeError, UnicodeDecodeError, OSError) as e:
+            print(f"[tiktok_pipeline] ⚠️ Skipping unreadable workflow state {path.name}: {e}")
+            continue
+    return None
 
 
 def advance(state: dict, stage: str, payload: Optional[dict] = None) -> dict:

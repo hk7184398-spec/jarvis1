@@ -69,13 +69,13 @@ def test_creates_scheduled_task(temp_dir, schtasks):
     assert result.startswith("Reminder set for ")
     assert len(schtasks) == 1
     command = schtasks[0]
-    assert command.startswith("schtasks /Create /TN ")
-    assert "MARKReminder_" in command
+    assert command[:3] == ["schtasks", "/Create", "/TN"]
+    assert "MARKReminder_" in command[3]
 
     notify_scripts = list(temp_dir.glob("*.pyw"))
     assert len(notify_scripts) == 1
     script = notify_scripts[0].read_text(encoding="utf-8")
-    assert "Take meds now" in script  # quotes stripped from the message
+    assert 'Take \\"meds\\" now' in script  # message is JSON-escaped, not stripped of quotes
     assert not list(temp_dir.glob("*.xml"))  # xml is cleaned up after scheduling
 
 
@@ -104,7 +104,9 @@ def test_reports_schtasks_failure(temp_dir, monkeypatch, capsys):
 
     monkeypatch.setattr(reminder_module.subprocess, "run", fake_run)
 
-    assert reminder(_future()) == "I couldn't schedule the reminder due to a system error."
+    assert reminder(_future()) == (
+        "I couldn't schedule the reminder due to a system error: Access denied"
+    )
     assert "schtasks failed: Access denied" in capsys.readouterr().out
     assert not list(temp_dir.glob("*.pyw"))  # notify script is cleaned up
 

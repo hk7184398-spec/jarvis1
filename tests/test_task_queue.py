@@ -133,7 +133,7 @@ def test_run_task_completes_and_invokes_callback(queue):
         created_at=time.time(),
         task_id="t1",
         goal="do it",
-        on_complete=lambda task_id, result: seen.append((task_id, result)),
+        on_complete=lambda task_id, result, error: seen.append((task_id, result)),
     )
     queue._tasks["t1"] = task
     queue._active_count = 1

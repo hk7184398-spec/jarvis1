@@ -65,7 +65,7 @@ def test_browser_failure_is_reported(monkeypatch):
 
     monkeypatch.setattr(weather_report.webbrowser, "open", boom)
     msg = weather_report.weather_action({"city": "Ankara"})
-    assert msg == "Sir, I couldn't open the browser for the weather report."
+    assert msg == "Sir, I couldn't open the browser for the weather report: no browser"
 
 
 def test_session_memory_records_search(opened):

@@ -31,9 +31,10 @@ def or_client(tmp_path, monkeypatch):
 
 
 class FakeHTTPResponse:
-    def __init__(self, status_code=200, payload=None):
+    def __init__(self, status_code=200, payload=None, text=""):
         self.status_code = status_code
         self._payload = payload if payload is not None else {}
+        self.text = text
 
     def json(self):
         return self._payload
@@ -68,7 +69,7 @@ def test_call_returns_stripped_content(or_client):
     with mock.patch.object(
         or_client.requests, "post", return_value=FakeHTTPResponse(200, _content("  hi  "))
     ) as post:
-        assert client._call("m", [{"role": "user", "content": "q"}]) == "hi"
+        assert client._call("m", [{"role": "user", "content": "q"}]) == ("hi", "")
     assert post.call_args.kwargs["json"]["model"] == "m"
     assert "response_format" not in post.call_args.kwargs["json"]
 
@@ -87,21 +88,28 @@ def test_call_returns_none_for_empty_content(or_client):
     with mock.patch.object(
         or_client.requests, "post", return_value=FakeHTTPResponse(200, _content(""))
     ):
-        assert client._call("m", []) is None
+        result, error = client._call("m", [])
+        assert result is None
+        assert "empty completion" in error
 
 
 def test_call_marks_rate_limited_on_429(or_client):
     client = or_client.OpenRouterClient()
     with mock.patch.object(or_client.requests, "post", return_value=FakeHTTPResponse(429)):
-        assert client._call("m", []) is None
+        result, error = client._call("m", [])
+        assert result is None
+        assert "rate limited" in error
     assert client._is_rate_limited("m") is True
 
 
 def test_call_retries_on_http_error_then_gives_up(or_client):
     client = or_client.OpenRouterClient()
-    with mock.patch.object(or_client.requests, "post", return_value=FakeHTTPResponse(500)) as post, \
-            mock.patch.object(or_client.time, "sleep"):
-        assert client._call("m", []) is None
+    with mock.patch.object(
+        or_client.requests, "post", return_value=FakeHTTPResponse(500, text="server exploded")
+    ) as post, mock.patch.object(or_client.time, "sleep"):
+        result, error = client._call("m", [])
+        assert result is None
+        assert "HTTP 500" in error
     assert post.call_count == or_client.MAX_RETRIES_PER_MODEL
 
 
@@ -110,14 +118,16 @@ def test_call_retries_on_timeout(or_client):
     responses = [or_client.requests.exceptions.Timeout(), FakeHTTPResponse(200, _content("late"))]
     with mock.patch.object(or_client.requests, "post", side_effect=responses), \
             mock.patch.object(or_client.time, "sleep"):
-        assert client._call("m", []) == "late"
+        assert client._call("m", []) == ("late", "")
 
 
 def test_call_handles_unexpected_exception(or_client):
     client = or_client.OpenRouterClient()
     with mock.patch.object(or_client.requests, "post", side_effect=ValueError("boom")), \
             mock.patch.object(or_client.time, "sleep"):
-        assert client._call("m", []) is None
+        result, error = client._call("m", [])
+        assert result is None
+        assert "boom" in error
 
 
 def test_rate_limit_expires_after_cooldown(or_client):
@@ -132,7 +142,7 @@ def test_rate_limit_expires_after_cooldown(or_client):
 
 def test_call_with_fallback_uses_requested_model_first(or_client):
     client = or_client.OpenRouterClient()
-    with mock.patch.object(client, "_call", return_value="answer") as call:
+    with mock.patch.object(client, "_call", return_value=("answer", "")) as call:
         assert client._call_with_fallback(["pool-a"], [], model="chosen") == "answer"
     assert call.call_args.args[0] == "chosen"
 
@@ -144,7 +154,7 @@ def test_call_with_fallback_skips_rate_limited_models(or_client):
 
     def fake_call(model, *args, **kwargs):
         tried.append(model)
-        return "answer" if model == "free" else None
+        return ("answer", "") if model == "free" else (None, f"{model}: failed")
 
     with mock.patch.object(client, "_call", side_effect=fake_call):
         assert client._call_with_fallback(["busy", "free"], [], model="busy") == "answer"
@@ -153,7 +163,7 @@ def test_call_with_fallback_skips_rate_limited_models(or_client):
 
 def test_call_with_fallback_raises_when_all_models_fail(or_client):
     client = or_client.OpenRouterClient()
-    with mock.patch.object(client, "_call", return_value=None):
+    with mock.patch.object(client, "_call", return_value=(None, "boom")):
         with pytest.raises(RuntimeError, match="All models failed"):
             client._call_with_fallback(["a", "b"], [])
 

@@ -441,8 +441,7 @@ def _screen_debug_action(description, file_path, player, speak=None) -> str:
 
         client = get_genai_client()
 
-        image_bytes  = screenshot_path.read_bytes()
-        image_base64 = _image_to_base64(screenshot_path)
+        image_bytes = screenshot_path.read_bytes()
 
         user_question = description or "What error or problem do you see on the screen? How can it be fixed?"
 

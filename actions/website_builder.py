@@ -69,34 +69,34 @@ TOOL_DECLARATIONS = [
             "production build to verify the result compiles before "
             "reporting success."
         ),
-        "input_schema": {
-            "type": "object",
+        "parameters": {
+            "type": "OBJECT",
             "properties": {
                 "project_name": {
-                    "type": "string",
+                    "type": "STRING",
                     "description": "Folder-safe project name, e.g. 'acme-agency'",
                 },
                 "business_type": {
-                    "type": "string",
+                    "type": "STRING",
                     "description": "e.g. 'AI automation SaaS', 'creative agency', 'personal brand'",
                 },
-                "target_audience": {"type": "string"},
+                "target_audience": {"type": "STRING"},
                 "goal": {
-                    "type": "string",
+                    "type": "STRING",
                     "description": "e.g. 'lead generation', 'authority + trust building'",
                 },
                 "style_reference": {
-                    "type": "string",
+                    "type": "STRING",
                     "description": "Design style reference, defaults to Linear+Apple+Stripe",
                 },
                 "theme": {
-                    "type": "string",
+                    "type": "STRING",
                     "enum": ["dark", "light"],
                     "description": "Defaults to dark",
                 },
                 "sections": {
-                    "type": "array",
-                    "items": {"type": "string"},
+                    "type": "ARRAY",
+                    "items": {"type": "STRING"},
                     "description": "Ordered page sections. Defaults to the standard high-converting structure.",
                 },
             },

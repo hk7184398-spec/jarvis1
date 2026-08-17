@@ -1,5 +1,6 @@
 import asyncio
 import threading
+import time
 import traceback
 
 import sounddevice as sd
@@ -32,7 +33,7 @@ from actions.computer_control  import computer_control
 from actions.game_updater      import game_updater
 from actions.viral_clipper     import jarvis_tool_cut_viral_clips
 from actions.website_builder   import TOOL_DECLARATIONS as website_builder_tools
-from actions.website_builder   import build_website
+from actions.website_builder   import jarvis_tool_generate_website
 from actions.facebook_poster   import facebook_post
 from actions.screen_recorder   import TOOL_DECLARATIONS as screen_recorder_tools
 from actions.screen_recorder   import start_recording, stop_recording, get_recording_status
@@ -63,7 +64,27 @@ RECEIVE_SAMPLE_RATE = 24000
 CHUNK_SIZE          = 1024
 
 
+# System prompt + skill-registry scan (AST-parses every module in actions/
+# and agent/) are expensive, so they are cached: rebuilt at most once per
+# _PROMPT_CACHE_TTL seconds, or immediately when the prompt file changes.
+# Memory stays per-connect (it changes far more often than code/docs).
+_PROMPT_CACHE_TTL = 300  # seconds
+_prompt_cache: dict = {"text": None, "built_at": 0.0, "mtime": None}
+
+
 def _load_system_prompt() -> str:
+    try:
+        mtime = PROMPT_PATH.stat().st_mtime
+    except OSError:
+        mtime = None
+
+    if (
+        _prompt_cache["text"] is not None
+        and _prompt_cache["mtime"] == mtime
+        and time.monotonic() - _prompt_cache["built_at"] < _PROMPT_CACHE_TTL
+    ):
+        return _prompt_cache["text"]
+
     try:
         prompt = PROMPT_PATH.read_text(encoding="utf-8")
     except OSError as e:
@@ -74,7 +95,7 @@ def _load_system_prompt() -> str:
             "Never simulate or guess results — always call the appropriate tool."
         )
 
-    # Registry ko har startup pe rebuild karo (naye modules/docs khud detect ho jayenge)
+    # Registry ko rebuild karo (naye modules/docs khud detect ho jayenge)
     # aur uska summary system prompt ke saath jod do, taake Jarvis kisi bhi request
     # ka jawab dene se pehle registry check kar sake.
     try:
@@ -84,6 +105,7 @@ def _load_system_prompt() -> str:
     except Exception as e:
         print(f"[Registry] ⚠️ Could not build skill registry: {e}")
 
+    _prompt_cache.update(text=prompt, built_at=time.monotonic(), mtime=mtime)
     return prompt
     
 _last_memory_input = ""
@@ -614,13 +636,17 @@ class JarvisLive:
         self._speaking_lock = threading.Lock()
         self.ui.on_text_command = self._on_text_command
         self.mcp_manager    = McpManager()  # MCP INTEGRATION — config/mcp_servers.json se tools load hote hain
+        self._tool_dispatch = self._build_tool_dispatch()
 
     def _on_text_command(self, text: str):
         self._send_text(text, source="text command")
 
     def set_speaking(self, value: bool):
         with self._speaking_lock:
+            changed = self._is_speaking != value
             self._is_speaking = value
+        if not changed:
+            return  # playback calls this per audio chunk — only update the UI on transitions
         if value:
             self.ui.set_state("SPEAKING")
         elif not self.ui.muted:
@@ -694,6 +720,72 @@ class JarvisLive:
             ),
         )
 
+    def _build_tool_dispatch(self) -> dict:
+        """name -> handler(args) -> result string. Handlers run in a worker thread.
+
+        Built once: a dict lookup replaces the previous ~30-branch if/elif chain,
+        so dispatch is O(1) and adding a tool is a one-line change. Built-in tools
+        take precedence over MCP-discovered tools on a name collision.
+        """
+        ui    = self.ui
+        speak = self.speak
+
+        def with_current_file(a: dict) -> dict:
+            if not a.get("file_path") and ui.current_file:
+                a = {**a, "file_path": ui.current_file}
+            return a
+
+        def generate_website(a: dict) -> str:
+            # Verified-execution tool: report the true pipeline outcome —
+            # success only when the production build actually compiled.
+            res = jarvis_tool_generate_website(**a)
+            if isinstance(res, dict):
+                if res.get("success"):
+                    return f"Website generated and production build verified at {res.get('project_path', '')}."
+                return f"Website generation failed at stage {res.get('stage', '?')}: {res.get('error', res)}"
+            return str(res)
+
+        return {
+            "open_app":          lambda a: open_app(parameters=a, response=None, player=ui) or f"Opened {a.get('app_name')}.",
+            "weather_report":    lambda a: weather_action(parameters=a, player=ui) or "Weather delivered.",
+            "browser_control":   lambda a: browser_control(parameters=a, player=ui) or "Done.",
+            "file_controller":   lambda a: file_controller(parameters=a, player=ui) or "Done.",
+            "send_message":      lambda a: send_message(parameters=a, response=None, player=ui, session_memory=None) or f"Message sent to {a.get('receiver')}.",
+            # Verified-execution tool: facebook_post() itself returns the true outcome
+            # (success with post_id, or a specific failure reason) — never overridden.
+            "facebook_post":     lambda a: facebook_post(parameters=a, player=ui, speak=speak),
+            "reminder":          lambda a: reminder(parameters=a, response=None, player=ui) or "Reminder set.",
+            "youtube_video":     lambda a: youtube_video(parameters=a, response=None, player=ui) or "Done.",
+            "file_processor":    lambda a: file_processor(parameters=with_current_file(a), player=ui, speak=speak) or "Done.",
+            "computer_settings": lambda a: computer_settings(parameters=a, response=None, player=ui) or "Done.",
+            "desktop_control":   lambda a: desktop_control(parameters=a, player=ui) or "Done.",
+            "code_helper":       lambda a: code_helper(parameters=a, player=ui, speak=speak) or "Done.",
+            "dev_agent":         lambda a: dev_agent(parameters=a, player=ui, speak=speak) or "Done.",
+            "web_search":        lambda a: web_search_action(parameters=a, player=ui) or "Done.",
+            "ask_claude":        lambda a: ask_claude_action(parameters=a, player=ui) or "Done.",
+            "computer_control":  lambda a: computer_control(parameters=a, player=ui) or "Done.",
+            "game_updater":      lambda a: game_updater(parameters=a, player=ui, speak=speak) or "Done.",
+            "flight_finder":     lambda a: flight_finder(parameters=a, player=ui) or "Done.",
+            "cut_viral_clips":   lambda a: jarvis_tool_cut_viral_clips(
+                                             video_source=a["video_source"],
+                                             num_clips=a.get("num_clips", 5),
+                                         ) or "Done.",
+            "generate_website":  generate_website,
+            "start_screen_recording":      lambda a: start_recording(parameters=a, player=ui) or "Done.",
+            "stop_screen_recording":       lambda a: stop_recording(parameters=a, player=ui) or "Done.",
+            "get_screen_recording_status": lambda a: get_recording_status(parameters=a, player=ui) or "Done.",
+            "start_tiktok_workflow":       lambda a: start_tiktok_workflow(parameters=a, player=ui) or "Done.",
+            "get_tiktok_status":           lambda a: get_tiktok_status(parameters=a, player=ui) or "Done.",
+            "continue_tiktok_workflow":    lambda a: continue_tiktok_workflow(parameters=a, player=ui) or "Done.",
+            "finalize_tiktok_video":       lambda a: finalize_tiktok_video(parameters=a, player=ui) or "Done.",
+            "publish_tiktok_video":        lambda a: publish_tiktok_video(parameters=a, player=ui) or "Done.",
+            "gdrive_status_start":  lambda a: gdrive_status_start(parameters=a, player=ui) or "Started.",
+            "gdrive_status_stop":   lambda a: gdrive_status_stop(parameters=a, player=ui) or "Stopped.",
+            "gdrive_status_now":    lambda a: gdrive_status_now(parameters=a, player=ui) or "Checked.",
+            "gdrive_status_status": lambda a: gdrive_status_status(parameters=a, player=ui) or "Done.",
+            "read_project_doc":     lambda a: read_doc(a.get("doc_name", "")) or "Doc not found.",
+        }
+
     async def _execute_tool(self, fc) -> types.FunctionResponse:
         name = fc.name
         args = dict(fc.args or {})
@@ -714,56 +806,11 @@ class JarvisLive:
                 response={"result": "ok", "silent": True}
             )
 
-        loop   = asyncio.get_event_loop()
+        loop   = asyncio.get_running_loop()
         result = "Done."
 
         try:
-            if name == "open_app":
-                r = await loop.run_in_executor(None, lambda: open_app(parameters=args, response=None, player=self.ui))
-                result = r or f"Opened {args.get('app_name')}."
-
-            elif name == "weather_report":
-                r = await loop.run_in_executor(None, lambda: weather_action(parameters=args, player=self.ui))
-                result = r or "Weather delivered."
-
-            elif name == "browser_control":
-                r = await loop.run_in_executor(None, lambda: browser_control(parameters=args, player=self.ui))
-                result = r or "Done."
-
-            elif name == "file_controller":
-                r = await loop.run_in_executor(None, lambda: file_controller(parameters=args, player=self.ui))
-                result = r or "Done."
-
-            elif name == "send_message":
-                r = await loop.run_in_executor(None, lambda: send_message(parameters=args, response=None, player=self.ui, session_memory=None))
-                result = r or f"Message sent to {args.get('receiver')}."
-
-            elif name == "facebook_post":
-                # Verified-execution tool: facebook_post() itself returns the
-                # true outcome (success with post_id, or a specific failure
-                # reason) — never overridden with a generic fallback string.
-                result = await loop.run_in_executor(
-                    None, lambda: facebook_post(parameters=args, player=self.ui, speak=self.speak)
-                )
-
-            elif name == "reminder":
-                r = await loop.run_in_executor(None, lambda: reminder(parameters=args, response=None, player=self.ui))
-                result = r or "Reminder set."
-
-            elif name == "youtube_video":
-                r = await loop.run_in_executor(None, lambda: youtube_video(parameters=args, response=None, player=self.ui))
-                result = r or "Done."
-            elif name == "file_processor":
-                if not args.get("file_path") and self.ui.current_file:
-                    args["file_path"] = self.ui.current_file
-                r = await loop.run_in_executor(
-                    None,
-                    lambda: file_processor(parameters=args, player=self.ui, speak=self.speak)
-                )
-                result = r or "Done."
-
-
-            elif name == "screen_process":
+            if name == "screen_process":
                 def _run_screen_process():
                     try:
                         screen_process(parameters=args, response=None,
@@ -778,22 +825,6 @@ class JarvisLive:
                 ).start()
                 result = "Vision module activated. Stay completely silent — vision module will speak directly."
 
-            elif name == "computer_settings":
-                r = await loop.run_in_executor(None, lambda: computer_settings(parameters=args, response=None, player=self.ui))
-                result = r or "Done."
-
-            elif name == "desktop_control":
-                r = await loop.run_in_executor(None, lambda: desktop_control(parameters=args, player=self.ui))
-                result = r or "Done."
-
-            elif name == "code_helper":
-                r = await loop.run_in_executor(None, lambda: code_helper(parameters=args, player=self.ui, speak=self.speak))
-                result = r or "Done."
-
-            elif name == "dev_agent":
-                r = await loop.run_in_executor(None, lambda: dev_agent(parameters=args, player=self.ui, speak=self.speak))
-                result = r or "Done."
-
             elif name == "agent_task":
                 from agent.task_queue import get_queue, TaskPriority
                 priority_map = {"low": TaskPriority.LOW, "normal": TaskPriority.NORMAL, "high": TaskPriority.HIGH}
@@ -801,94 +832,6 @@ class JarvisLive:
                 task_id  = get_queue().submit(goal=args.get("goal", ""), priority=priority, speak=self.speak)
                 result   = f"Task started (ID: {task_id})."
 
-            elif name == "web_search":
-                r = await loop.run_in_executor(None, lambda: web_search_action(parameters=args, player=self.ui))
-                result = r or "Done."
-
-            elif name == "ask_claude":
-                r = await loop.run_in_executor(None, lambda: ask_claude_action(parameters=args, player=self.ui))
-                result = r or "Done."
-
-            elif self.mcp_manager.owns(name):  # MCP INTEGRATION
-                result = await self.mcp_manager.call_tool(name, args)
-
-            elif name == "computer_control":
-                r = await loop.run_in_executor(None, lambda: computer_control(parameters=args, player=self.ui))
-                result = r or "Done."
-
-            elif name == "game_updater":
-                r = await loop.run_in_executor(None, lambda: game_updater(parameters=args, player=self.ui, speak=self.speak))
-                result = r or "Done."
-
-            elif name == "flight_finder":
-                r = await loop.run_in_executor(None, lambda: flight_finder(parameters=args, player=self.ui))
-                result = r or "Done."
-
-            elif name == "cut_viral_clips":
-                r = await loop.run_in_executor(
-                    None,
-                    lambda: jarvis_tool_cut_viral_clips(
-                        video_source=args["video_source"],
-                        num_clips=args.get("num_clips", 5),
-                    )
-                )
-                result = r or "Done."
-
-            elif name == "build_website":
-                r = await loop.run_in_executor(None, lambda: build_website(parameters=args, player=self.ui))
-                result = r or "Done."
-
-            elif name == "start_screen_recording":
-                r = await loop.run_in_executor(None, lambda: start_recording(parameters=args, player=self.ui))
-                result = r or "Done."
-
-            elif name == "stop_screen_recording":
-                r = await loop.run_in_executor(None, lambda: stop_recording(parameters=args, player=self.ui))
-                result = r or "Done."
-
-            elif name == "get_screen_recording_status":
-                r = await loop.run_in_executor(None, lambda: get_recording_status(parameters=args, player=self.ui))
-                result = r or "Done."
-
-            elif name == "start_tiktok_workflow":
-                r = await loop.run_in_executor(None, lambda: start_tiktok_workflow(parameters=args, player=self.ui))
-                result = r or "Done."
-
-            elif name == "get_tiktok_status":
-                r = await loop.run_in_executor(None, lambda: get_tiktok_status(parameters=args, player=self.ui))
-                result = r or "Done."
-
-            elif name == "continue_tiktok_workflow":
-                r = await loop.run_in_executor(None, lambda: continue_tiktok_workflow(parameters=args, player=self.ui))
-                result = r or "Done."
-
-            elif name == "finalize_tiktok_video":
-                r = await loop.run_in_executor(None, lambda: finalize_tiktok_video(parameters=args, player=self.ui))
-                result = r or "Done."
-
-            elif name == "publish_tiktok_video":
-                r = await loop.run_in_executor(None, lambda: publish_tiktok_video(parameters=args, player=self.ui))
-                result = r or "Done."
-
-            elif name == "gdrive_status_start":
-                r = await loop.run_in_executor(None, lambda: gdrive_status_start(parameters=args, player=self.ui))
-                result = r or "Started."
-
-            elif name == "gdrive_status_stop":
-                r = await loop.run_in_executor(None, lambda: gdrive_status_stop(parameters=args, player=self.ui))
-                result = r or "Stopped."
-
-            elif name == "gdrive_status_now":
-                r = await loop.run_in_executor(None, lambda: gdrive_status_now(parameters=args, player=self.ui))
-                result = r or "Checked."
-
-            elif name == "gdrive_status_status":
-                r = await loop.run_in_executor(None, lambda: gdrive_status_status(parameters=args, player=self.ui))
-                result = r or "Done."
-
-            elif name == "read_project_doc":
-                r = await loop.run_in_executor(None, lambda: read_doc(args.get("doc_name", "")))
-                result = r or "Doc not found."
             elif name == "shutdown_jarvis":
                 self.ui.write_log("SYS: Shutdown requested.")
                 self.speak("Goodbye, sir.")
@@ -899,8 +842,15 @@ class JarvisLive:
                     os._exit(0)
 
                 threading.Thread(target=_shutdown, daemon=True).start()
+
             else:
-                result = f"Unknown tool: {name}"
+                handler = self._tool_dispatch.get(name)
+                if handler is not None:
+                    result = await loop.run_in_executor(None, handler, args)
+                elif self.mcp_manager.owns(name):  # MCP INTEGRATION
+                    result = await self.mcp_manager.call_tool(name, args)
+                else:
+                    result = f"Unknown tool: {name}"
 
         except Exception as e:
             result = f"Tool '{name}' failed: {e}"
@@ -917,6 +867,24 @@ class JarvisLive:
             response={"result": result}
         )
 
+    def _enqueue_audio(self, data: bytes) -> None:
+        """Queue one mic chunk for sending. When the send buffer is full, drop
+        the OLDEST chunk so Gemini always hears fresh audio (realtime prefers
+        low latency over losslessness) instead of raising QueueFull inside the
+        event loop, which the previous put_nowait() callback did on overflow."""
+        q = self.out_queue
+        if q is None:
+            return
+        if q.full():
+            try:
+                q.get_nowait()
+            except asyncio.QueueEmpty:
+                pass
+        try:
+            q.put_nowait({"data": data, "mime_type": "audio/pcm"})
+        except asyncio.QueueFull:
+            pass  # lost the race with the consumer — safe to skip one chunk
+
     async def _send_realtime(self):
         while True:
             msg = await self.out_queue.get()
@@ -924,17 +892,13 @@ class JarvisLive:
 
     async def _listen_audio(self):
         print("[JARVIS] 🎤 Mic started")
-        loop = asyncio.get_event_loop()
+        loop = asyncio.get_running_loop()
 
         def callback(indata, frames, time_info, status):
             with self._speaking_lock:
                 jarvis_speaking = self._is_speaking
             if not jarvis_speaking and not self.ui.muted:
-                data = indata.tobytes()
-                loop.call_soon_threadsafe(
-                    self.out_queue.put_nowait,
-                    {"data": data, "mime_type": "audio/pcm"}
-                )
+                loop.call_soon_threadsafe(self._enqueue_audio, indata.tobytes())
 
         try:
             with sd.InputStream(
@@ -945,8 +909,7 @@ class JarvisLive:
                 callback=callback,
             ):
                 print("[JARVIS] 🎤 Mic stream open")
-                while True:
-                    await asyncio.sleep(0.1)
+                await asyncio.Event().wait()  # park until the TaskGroup cancels us
         except Exception as e:
             print(f"[JARVIS] ❌ Mic: {e}")
             raise
@@ -1043,7 +1006,9 @@ class JarvisLive:
         await self.mcp_manager.connect_all()
         TOOL_DECLARATIONS.extend(self.mcp_manager.get_tool_declarations())
 
+        backoff = 3
         while True:
+            connected_at = None
             try:
                 print("[JARVIS] 🔌 Connecting...")
                 self.ui.set_state("THINKING")
@@ -1054,9 +1019,10 @@ class JarvisLive:
                     asyncio.TaskGroup() as tg,
                 ):
                     self.session        = session
-                    self._loop          = asyncio.get_event_loop()
+                    self._loop          = asyncio.get_running_loop()
                     self.audio_in_queue = asyncio.Queue()
                     self.out_queue      = asyncio.Queue(maxsize=10)
+                    connected_at        = time.monotonic()
 
                     print("[JARVIS] ✅ Connected.")
                     self.ui.set_state("LISTENING")
@@ -1066,15 +1032,23 @@ class JarvisLive:
                     tg.create_task(self._listen_audio())
                     tg.create_task(self._receive_audio())
                     tg.create_task(self._play_audio())
-                    
+
             except Exception as e:
                 print(f"[JARVIS] ⚠️ {e}")
                 traceback.print_exc()
 
             self.set_speaking(False)
             self.ui.set_state("THINKING")
-            print("[JARVIS] 🔄 Reconnecting in 3s...")
-            await asyncio.sleep(3)
+
+            # Healthy sessions reset the backoff; rapid repeated failures back
+            # off exponentially (3s → 60s cap) instead of hammering the API
+            # every 3 seconds forever (e.g. when quota is exhausted).
+            if connected_at and time.monotonic() - connected_at > 30:
+                backoff = 3
+            print(f"[JARVIS] 🔄 Reconnecting in {backoff}s...")
+            await asyncio.sleep(backoff)
+            backoff = min(backoff * 2, 60)
+
 
 def main():
     ui = JarvisUI(str(BASE_DIR / "face.png"))

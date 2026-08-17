@@ -53,14 +53,21 @@ def _classify_error(output: str) -> str:
     return "none"
 
 
-def _has_error(output: str, run_command: str) -> bool:
-    
+def _has_error(output: str, run_command: str, returncode: int | None = None) -> bool:
+
     low = output.lower()
 
     if "timed out" in low:
         return False
 
     if not output.strip():
+        return False
+
+    if returncode == 0 and "traceback" not in low:
+        # Clean exit with no traceback: even if the program's own logging
+        # mentions "error"/"warning"/"no module named" (e.g. it caught an
+        # optional-dependency ImportError itself and degraded gracefully),
+        # that's not a failure dev_agent needs to fix.
         return False
 
     error_type = _classify_error(output)
@@ -210,6 +217,12 @@ def _install_dependencies(dependencies: list[str], project_dir: Path) -> str:
     to_install = []
     for dep in dependencies:
         pkg_name = re.split(r"[>=<!]", dep)[0].strip()
+        # If the planner gave a bare, unpinned name we know is broken/wrong
+        # (see _IMPORT_TO_PIP_SPEC), correct it now rather than after a
+        # failed run. A dep that already carries its own version pin is
+        # left as the planner specified it.
+        if dep == pkg_name:
+            dep = _IMPORT_TO_PIP_SPEC.get(pkg_name.lower(), dep)
         result = subprocess.run(
             [sys.executable, "-m", "pip", "show", pkg_name],
             capture_output=True, text=True
@@ -259,7 +272,7 @@ def _open_vscode(project_dir: Path) -> bool:
             continue
     return False
 
-def _run_project(run_command: str, project_dir: Path, timeout: int = 30) -> str:
+def _run_project(run_command: str, project_dir: Path, timeout: int = 30) -> tuple[str, int | None]:
     print(f"[DevAgent] 🚀 Running: {run_command}")
     try:
         parts = run_command.split()
@@ -283,14 +296,39 @@ def _run_project(run_command: str, project_dir: Path, timeout: int = 30) -> str:
         if stderr:
             combined_parts.append(f"STDERR:\n{stderr}")
 
-        return "\n\n".join(combined_parts) if combined_parts else "Ran with no output."
+        output = "\n\n".join(combined_parts) if combined_parts else "Ran with no output."
+        return output, result.returncode
 
     except subprocess.TimeoutExpired:
-        return f"Timed out after {timeout}s — long-running app (server/GUI) is likely working."
+        return f"Timed out after {timeout}s — long-running app (server/GUI) is likely working.", None
     except FileNotFoundError as e:
-        return f"Command not found: {e}"
+        return f"Command not found: {e}", None
     except Exception as e:
-        return f"Run error: {e}"
+        return f"Run error: {e}", None
+
+# Import-name -> pip-install-spec mismatches. Without this, _try_auto_install's
+# naive "module name == pip package name" guess is wrong for these — e.g. it
+# would run `pip install cv2` (no such package) or `pip install moviepy`
+# (installs 2.x, which removed the `moviepy.editor` submodule that
+# AI-generated code almost always imports from — see moviepy's 2.0 migration
+# guide — so every moviepy project would burn all 3 auto-install retries and
+# still fail identically each time).
+_IMPORT_TO_PIP_SPEC = {
+    "cv2":          "opencv-python",
+    "pil":          "pillow",
+    "yaml":         "pyyaml",
+    "bs4":          "beautifulsoup4",
+    "sklearn":      "scikit-learn",
+    "dotenv":       "python-dotenv",
+    "docx":         "python-docx",
+    "pptx":         "python-pptx",
+    "moviepy":      "moviepy==1.0.3",  # last release with the moviepy.editor API
+    "win32com":     "pywin32",
+    "win32api":     "pywin32",
+    "attr":         "attrs",
+    "jwt":          "pyjwt",
+}
+
 
 def _try_auto_install(error_output: str, project_dir: Path) -> bool:
     """ModuleNotFoundError varsa eksik paketi otomatik kurmaya çalışır."""
@@ -301,11 +339,12 @@ def _try_auto_install(error_output: str, project_dir: Path) -> bool:
     if not match:
         return False
 
-    pkg = match.group(1).replace("_", "-").split(".")[0]
-    print(f"[DevAgent] 🔧 Auto-installing missing package: {pkg}")
+    module_name = match.group(1).split(".")[0]
+    pip_spec = _IMPORT_TO_PIP_SPEC.get(module_name.lower(), module_name.replace("_", "-"))
+    print(f"[DevAgent] 🔧 Auto-installing missing package: {pip_spec} (import: {module_name})")
     try:
         result = subprocess.run(
-            [sys.executable, "-m", "pip", "install", pkg],
+            [sys.executable, "-m", "pip", "install", pip_spec],
             capture_output=True, text=True,
             encoding="utf-8", errors="replace",
             timeout=60, cwd=str(project_dir)
@@ -493,10 +532,10 @@ def _build_project(
 
     for attempt in range(1, MAX_FIX_ATTEMPTS + 1):
         log(f"Running project (attempt {attempt}/{MAX_FIX_ATTEMPTS})...")
-        last_output = _run_project(run_command, project_dir, timeout)
+        last_output, last_returncode = _run_project(run_command, project_dir, timeout)
         log(f"Output preview: {last_output[:150]}")
 
-        if not _has_error(last_output, run_command):
+        if not _has_error(last_output, run_command, last_returncode):
             msg = (
                 f"Project '{proj_name}' is working, sir. "
                 f"Built in {attempt} attempt{'s' if attempt > 1 else ''}. "

@@ -34,10 +34,15 @@ from pathlib import Path
 from mcp import ClientSession, StdioServerParameters
 from mcp.client.stdio import stdio_client
 
-from core.paths import CONFIG_DIR
+from core.paths import CONFIG_DIR, BASE_DIR
 
 MCP_CONFIG_PATH = CONFIG_DIR / "mcp_servers.json"
 TOOL_SEP = "__"
+
+# Placeholder paths jo setup docs se copy-paste ho jate hain aur asli path
+# se replace karna bhool jate hain — inhe pehchan ke clear error dena hai
+# instead of cryptic "Connection closed".
+_PLACEHOLDER_MARKERS = ("path/to/your", "PUT_TOKEN_HERE", "<", ">")
 
 _TYPE_MAP = {
     "object": "OBJECT",
@@ -114,12 +119,58 @@ class McpManager:
             except Exception as e:
                 print(f"[MCP] ❌ FAILED to connect '{name}': {e}")
 
+    def _prepare_args(self, cfg: dict) -> list:
+        """Filesystem-type MCP servers ke path arguments ko validate/prepare karta hai
+        launch se pehle — taake "Connection closed" jaisi cryptic error ki jagah
+        clear, actionable message mile.
+
+        - Relative paths ko project BASE_DIR ke against resolve karta hai.
+        - Missing directories ko auto-create karta hai (agar valid path hai).
+        - Leftover setup-doc placeholders (e.g. "C:/path/to/your/...") ko
+          turant detect karke saaf error raise karta hai.
+        """
+        name = cfg.get("name", "unnamed")
+        raw_args = list(cfg.get("args", []))
+        if name != "filesystem":
+            return raw_args
+
+        prepared = []
+        for arg in raw_args:
+            # npx flags (-y) aur package specifiers (@scope/pkg) path nahi hote
+            if arg.startswith("-") or arg.startswith("@"):
+                prepared.append(arg)
+                continue
+
+            if any(marker in arg for marker in _PLACEHOLDER_MARKERS):
+                raise RuntimeError(
+                    f"Filesystem MCP server ka path abhi bhi placeholder hai: '{arg}'. "
+                    f"config/mcp_servers.json mein 'args' ko apne actual folder "
+                    f"(e.g. Obsidian vault) ke real path se update karo."
+                )
+
+            path = Path(arg)
+            if not path.is_absolute():
+                path = (BASE_DIR / path).resolve()
+
+            if not path.exists():
+                try:
+                    path.mkdir(parents=True, exist_ok=True)
+                    print(f"[MCP] filesystem: '{path}' nahi mila tha, create kar diya.")
+                except Exception as e:
+                    raise RuntimeError(
+                        f"Filesystem MCP path '{path}' create nahi ho saka: {e}"
+                    )
+
+            prepared.append(str(path))
+
+        return prepared
+
     async def _connect_one(self, cfg: dict):
         name = cfg["name"]
         env = {**os.environ, **cfg.get("env", {})}
         params = StdioServerParameters(
             command=cfg["command"],
-            args=cfg.get("args", []),
+            args=self._prepare_args(cfg),
             env=env,
         )
 

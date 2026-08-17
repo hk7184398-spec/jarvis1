@@ -4,7 +4,8 @@
       "name": "filesystem",
       "enabled": true,
       "command": "npx",
-      "args": ["-y", "@modelcontextprotocol/server-filesystem", "C:/path/to/your/Obsidian/vault"]
+      "args": ["-y", "@modelcontextprotocol/server-filesystem", "./data/obsidian_vault"],
+      "_comment": "Upar wala path project-relative default hai aur pehli run par auto-create ho jayega. Apne asal Obsidian vault se link karna hai to yahan uska real absolute path daal do (e.g. Windows par 'C:/Users/Dani/Documents/MyVault')."
     },
     {
       "name": "github",

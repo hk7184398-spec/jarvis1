@@ -1,0 +1,14 @@
+{
+  "tiktok_username": "your_tiktok_username",
+  "tiktok_password": "your_tiktok_password",
+  "anthropic_api_key": "sk-ant-...",
+  "tiktok_api_token": "your_tiktok_api_token_if_available",
+  "auto_hashtags": true,
+  "hashtag_count": 10,
+  "auto_description": true,
+  "upload_method": "selenium",
+  "selenium_headless": false,
+  "log_level": "INFO",
+  "retry_on_failure": true,
+  "max_retries": 3
+}

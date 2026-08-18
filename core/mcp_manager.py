@@ -54,6 +54,18 @@ _TYPE_MAP = {
 }
 
 
+def _get_input_schema(tool) -> dict:
+    """MCP `Tool` object ka input schema attribute alag-alag `mcp` package
+    versions mein alag naam se aata hai — kabhi camelCase `inputSchema`
+    (older MCP spec), kabhi snake_case `input_schema` (pydantic ka default
+    alias-less naam newer versions mein). Dono ko handle karta hai taake
+    package version upgrade hone par yeh dobara na toote."""
+    schema = getattr(tool, "inputSchema", None)
+    if schema is None:
+        schema = getattr(tool, "input_schema", None)
+    return schema or {}
+
+
 def _json_schema_to_gemini(schema: dict) -> dict:
     """MCP tool ka inputSchema (standard lowercase JSON Schema) JARVIS ke
     Gemini Live TOOL_DECLARATIONS format (uppercase types) mein convert karta hai.
@@ -196,7 +208,7 @@ class McpManager:
                 declarations.append({
                     "name": prefixed,
                     "description": f"[{server_name}] {tool.description or ''}".strip(),
-                    "parameters": _json_schema_to_gemini(tool.inputSchema or {}),
+                    "parameters": _json_schema_to_gemini(_get_input_schema(tool)),
                 })
         return declarations
 

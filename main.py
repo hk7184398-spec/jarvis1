@@ -998,13 +998,27 @@ class JarvisLive:
             stream.close()
 
     async def run(self):
-        client = get_genai_client(api_version="v1beta")
+        # Client creation aur MCP connect ko try/except mein wrap kiya hai —
+        # pehle yeh loop se bahar the aur agar yahan exception aata (invalid
+        # API key, missing SDK, network issue) to poora background thread
+        # SILENTLY crash ho jata tha: UI hamesha "INITIALISING" pe atki reh
+        # jati aur koi error kahin nahi dikhta. Ab failure clearly UI +
+        # console dono mein report hoti hai (verified-execution principle).
+        try:
+            client = get_genai_client(api_version="v1beta")
 
-        # MCP INTEGRATION — ek dafa connect karo, discovered tools ko
-        # global TOOL_DECLARATIONS mein merge karo (loop shuru hone se pehle,
-        # taake _build_config() inhe turant Gemini ko bhej sake).
-        await self.mcp_manager.connect_all()
-        TOOL_DECLARATIONS.extend(self.mcp_manager.get_tool_declarations())
+            # MCP INTEGRATION — ek dafa connect karo, discovered tools ko
+            # global TOOL_DECLARATIONS mein merge karo (loop shuru hone se pehle,
+            # taake _build_config() inhe turant Gemini ko bhej sake).
+            await self.mcp_manager.connect_all()
+            TOOL_DECLARATIONS.extend(self.mcp_manager.get_tool_declarations())
+        except Exception as e:
+            msg = f"Startup failed — {e}"
+            print(f"[JARVIS] ❌ {msg}")
+            traceback.print_exc()
+            self.ui.write_log(f"ERR: {msg}")
+            self.ui.set_state("THINKING")
+            return
 
         backoff = 3
         while True:

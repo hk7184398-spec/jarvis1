@@ -3,7 +3,7 @@
 <!-- .py file dalo, ya root mein nayi .md file banao — agli baar yahan khud register ho jayegi. -->
 
 # Jarvis Skill & Module Registry
-_Last built: 2026-08-19T21:13:50_
+_Last built: 2026-08-19T22:28:06_
 
 ## Action / Agent Modules
 
@@ -21,12 +21,6 @@ _Last built: 2026-08-19T21:13:50_
   - functions: set_wallpaper, set_wallpaper_from_url, get_current_wallpaper, organize_desktop, list_desktop, clean_desktop, get_desktop_stats, desktop_control
 - **actions/dev_agent.py** — (no docstring yet — is file mein docstring add karo taake routing behtar ho)
   - functions: dev_agent
-- **actions/docx_tools.py** — docx_tools.py - Jarvis AI Word / DOCX support
-  - functions: word_document
-- **actions/error_handler.py** — (no docstring yet — is file mein docstring add karo taake routing behtar ho)
-  - functions: get_base_dir, analyze_error, generate_fix
-- **actions/executor.py** — (no docstring yet — is file mein docstring add karo taake routing behtar ho)
-  - functions: get_base_dir
 - **actions/facebook_poster.py** — Facebook Page posting with interactive workflow (text/photo/video).
   - functions: facebook_post
 - **actions/file_controller.py** — (no docstring yet — is file mein docstring add karo taake routing behtar ho)
@@ -39,17 +33,8 @@ _Last built: 2026-08-19T21:13:50_
   - functions: game_updater
 - **actions/gdrive_status_poster.py** *(TOOL_DECLARATIONS exposed)* — Google Drive → WhatsApp Status auto-poster.
   - functions: load_config, load_state, save_state, load_processed, mark_processed, is_processed, run_poll_cycle, start_watch, stop_watch, trigger_poll_now, get_watch_status, autostart_if_enabled
-- **actions/meeting_assistant.py** — (no docstring yet — is file mein docstring add karo taake routing behtar ho)
-- **actions/office_builder.py** — office_builder.py - Jarvis AI office document generation
-  - functions: create_presentation, create_spreadsheet
 - **actions/open_app.py** — (no docstring yet — is file mein docstring add karo taake routing behtar ho)
   - functions: open_app
-- **actions/pdf_tools.py** — pdf_tools.py - Jarvis AI PDF support
-  - functions: create_pdf
-- **actions/planner.py** — (no docstring yet — is file mein docstring add karo taake routing behtar ho)
-  - functions: get_base_dir, create_plan, replan
-- **actions/ppt_template_workflow.py** — (no docstring yet — is file mein docstring add karo taake routing behtar ho)
-  - functions: infer_presentation_profile, resolve_presentation_template, build_presentation_from_template
 - **actions/reminder.py** — (no docstring yet — is file mein docstring add karo taake routing behtar ho)
   - functions: reminder
 - **actions/screen_processor.py** — (no docstring yet — is file mein docstring add karo taake routing behtar ho)
@@ -58,8 +43,6 @@ _Last built: 2026-08-19T21:13:50_
   - functions: start_recording, stop_recording, get_recording_status
 - **actions/send_message.py** — (no docstring yet — is file mein docstring add karo taake routing behtar ho)
   - functions: send_message
-- **actions/task_queue.py** — (no docstring yet — is file mein docstring add karo taake routing behtar ho)
-  - functions: get_queue
 - **actions/viral_clipper.py** *(TOOL_DECLARATIONS exposed)* — actions/viral_clipper.py
   - functions: ensure_dependencies, is_url, download_video, get_local_video, probe_video, transcribe, call_ai, detect_viral_segments, cut_clip, process_video, jarvis_tool_cut_viral_clips, main
 - **actions/weather_report.py** — (no docstring yet — is file mein docstring add karo taake routing behtar ho)

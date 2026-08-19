@@ -1,0 +1,366 @@
+# J.A.R.V.I.S. Web Interface
+
+A complete Flask + WebSocket web version of the JARVIS PyQt6 desktop application, featuring the same dark theme (cyan/orange Stark Industries branding), three-panel HUD layout, and real-time backend integration.
+
+## Features
+
+✅ **Real-Time WebSocket Communication** - Bidirectional messaging between frontend and backend  
+✅ **Same UI/UX as PyQt6 Desktop** - Dark theme, radar HUD, activity log, status monitoring  
+✅ **Gemini Live Audio** - Voice input/output capabilities (when configured)  
+✅ **OpenRouter LLM Integration** - Free model fallback chain (Nemotron, Hermes, Llama, etc.)  
+✅ **System Metrics** - Live CPU/Memory/Disk monitoring  
+✅ **Memory Management** - Event extraction and context formatting  
+✅ **Tool Execution** - Extensible action framework  
+✅ **Responsive Design** - Works on desktop, tablet, mobile (via CSS grid)  
+
+---
+
+## Quick Start
+
+### 1. **Install Dependencies**
+
+```bash
+cd web_ui
+chmod +x run.sh  # macOS/Linux
+pip install -r requirements_web.txt
+
+# Also install parent repo dependencies for backend integration
+cd ..
+pip install -r requirements.txt
+```
+
+### 2. **Set API Keys** (Optional - can prompt on web UI)
+
+```bash
+# Linux/macOS
+export GEMINI_API_KEY="your-gemini-key"
+export OPENROUTER_API_KEY="your-openrouter-key"
+
+# Windows
+set GEMINI_API_KEY=your-gemini-key
+set OPENROUTER_API_KEY=your-openrouter-key
+```
+
+### 3. **Start the Web Server**
+
+**Linux/macOS:**
+```bash
+cd web_ui
+./run.sh 5000  # Default port
+```
+
+**Windows:**
+```bash
+cd web_ui
+run.bat
+```
+
+**Manual (any OS):**
+```bash
+cd web_ui
+python3 app.py
+```
+
+### 4. **Open in Browser**
+
+```
+http://localhost:5000
+```
+
+---
+
+## Architecture
+
+```
+web_ui/
+├── app.py                      # Flask server + WebSocket
+├── templates/
+│   └── index.html             # Main UI (three-panel HUD layout)
+├── static/
+│   ├── css/style.css          # Stark Industries dark theme
+│   └── js/
+│       ├── websocket.js       # Socket.IO client
+│       └── main.js            # UI interactions
+├── requirements_web.txt       # Python dependencies
+├── run.sh                      # Linux/macOS startup script
+├── run.bat                     # Windows startup script
+└── README.md                   # This file
+```
+
+### Workflow
+
+1. **User opens browser** → Served `index.html` (static Flask route)
+2. **JavaScript loads** → Connects to WebSocket via Socket.IO
+3. **Initialize** → User provides Gemini + OpenRouter API keys (or env vars)
+4. **User sends message** → `request_message` WebSocket event
+5. **Backend processes** → Threaded OpenRouterClient query + memory update
+6. **Real-time response** → `response` WebSocket event emitted back
+7. **Metrics stream** → System metrics polled every 1.5s via `get_metrics`
+8. **Tools execute** → `execute_tool` event (extensible action framework)
+
+---
+
+## File Structure & Roles
+
+### Backend (`app.py`)
+
+- **Flask Routes** (`/`, `/api/status`, `/api/memory`, etc.)
+- **WebSocket Events** (message handling, tool execution, metrics streaming)
+- **JarvisWebState** class (memory, metrics, OR client, session management)
+- **Threading** for non-blocking tool execution
+
+### Frontend (`templates/index.html` + `static/js/`)
+
+- **Three-panel layout**: Left (status) | Center (HUD/radar) | Right (interaction)
+- **Radar visualization** (SVG with rotating sweep, data points)
+- **Activity log** with color-coded entries (info/success/warning/error)
+- **Message input** with keyboard shortcuts (Enter to send)
+- **Quick actions** buttons (Weather, Time, Memory, Status)
+- **Status bars** for CPU/Memory/Disk with real-time updates
+- **Responsive grid** (adapts to mobile via CSS media queries)
+
+### Styling (`static/css/style.css`)
+
+- **Color scheme**: Cyan (#00d4ff) + Orange (#ff6b00) + Dark Navy (#000d14)
+- **Font**: Monospace (Courier New) for that "hacker" aesthetic
+- **CSS Variables** for easy theming (`:root`)
+- **Smooth animations**: Pulse indicators, rotating radar, status bar fills
+- **Full dark mode** (no light mode)
+
+---
+
+## API Endpoints
+
+### REST Routes
+
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| GET | `/` | Serve main UI |
+| GET | `/api/status` | Get system status + metrics |
+| GET | `/api/memory` | Get formatted memory context |
+| GET | `/api/history` | Get tool execution history |
+| POST | `/api/init` | Initialize with API keys |
+
+### WebSocket Events
+
+**Client → Server:**
+- `request_message` → Send user message
+- `start_listening` → Activate Gemini Live voice
+- `stop_listening` → Deactivate voice
+- `get_metrics` → Request current system metrics
+- `execute_tool` → Call a tool/action
+
+**Server → Client:**
+- `status` → Generic status message (info/warning/error)
+- `response` → LLM response + metadata (model, tokens)
+- `error` → Error notification
+- `metrics` → System metrics (CPU, RAM, Disk, etc.)
+- `listening_status` → Voice state update
+- `tool_result` → Result from tool execution
+
+---
+
+## Configuration
+
+### Environment Variables
+
+```bash
+# API Keys
+GEMINI_API_KEY=sk-...
+OPENROUTER_API_KEY=sk-...
+
+# Flask
+SECRET_KEY=your-secret-key-change-in-production
+FLASK_ENV=development
+```
+
+### Python Configuration
+
+Edit `app.py` to customize:
+
+- **Port**: Change line `socketio.run(..., port=5000, ...)`
+- **Debug mode**: Set `debug=True` for hot reload
+- **CORS**: Configure `CORS(app, ...)` for cross-origin requests
+- **Memory limits**: Adjust `max_chars` in `format_memory_for_prompt()`
+
+---
+
+## Integration with Parent `jarvis1` Repo
+
+The web UI automatically imports and uses:
+
+- `or_client.py` → OpenRouter API client (free LLM chain)
+- `core/config.py` → Configuration management
+- `memory/memory_manager.py` → Event storage + memory extraction
+- `core/paths.py` → Path resolution (PROMPT_PATH, BASE_DIR)
+
+To extend functionality:
+
+1. Add new tools in `actions/` folder (parent repo)
+2. Define WebSocket handler in `app.py`
+3. Update `main.js` to emit new events
+4. Add UI buttons to `index.html`
+
+---
+
+## Domain Deployment (Beyond Localhost)
+
+Once you're happy with localhost, deploy to a real domain:
+
+### Option 1: Vercel/Netlify (Frontend Only)
+
+```bash
+npm install -g vercel
+vercel --prod
+```
+
+### Option 2: Self-Hosted (Full Stack)
+
+```bash
+# Buy domain, SSH into server
+git clone https://github.com/hk7184398-spec/jarvis1.git
+cd jarvis1/web_ui
+
+# Install + Run with systemd service
+sudo systemctl start jarvis-web
+```
+
+**Systemd Service File:**
+
+```ini
+[Unit]
+Description=JARVIS Web UI
+After=network.target
+
+[Service]
+Type=simple
+User=jarvis
+WorkingDirectory=/home/jarvis/jarvis1/web_ui
+ExecStart=/usr/bin/python3 /home/jarvis/jarvis1/web_ui/app.py
+Restart=on-failure
+
+[Install]
+WantedBy=multi-user.target
+```
+
+### Option 3: Docker
+
+```dockerfile
+FROM python:3.11-slim
+
+WORKDIR /app
+COPY requirements_web.txt requirements.txt ./
+RUN pip install -r requirements_web.txt -r requirements.txt
+
+COPY . .
+EXPOSE 5000
+
+CMD ["python", "web_ui/app.py"]
+```
+
+```bash
+docker build -t jarvis-web .
+docker run -p 5000:8000 \
+  -e GEMINI_API_KEY=$GEMINI_API_KEY \
+  -e OPENROUTER_API_KEY=$OPENROUTER_API_KEY \
+  jarvis-web
+```
+
+---
+
+## Troubleshooting
+
+### "Cannot find module 'or_client'"
+
+Make sure you're in the parent `jarvis1/` directory:
+
+```bash
+cd .. && python web_ui/app.py
+```
+
+### "WebSocket connection refused"
+
+Check Flask is listening:
+
+```bash
+curl http://localhost:5000/api/status
+```
+
+If 404, Flask isn't running. Restart with:
+
+```bash
+python web_ui/app.py
+```
+
+### "API key not valid"
+
+Verify your keys in the modal initialization dialog or check env:
+
+```bash
+echo $GEMINI_API_KEY
+echo $OPENROUTER_API_KEY
+```
+
+### Slow responses
+
+OpenRouter free models can be rate-limited. Check:
+
+```bash
+# In app.py logs - "model X rate limited, trying next..."
+```
+
+Consider upgrading to paid OpenRouter tier.
+
+---
+
+## Performance Tips
+
+1. **Compress responses** → Enable gzip in Flask
+2. **Cache memory** → Reduce redundant extraction calls
+3. **Throttle metrics** → Update metrics every 2-3 seconds (not 1)
+4. **Minimize WebSocket events** → Batch tool results if possible
+5. **Use CDN** → Serve static CSS/JS from CloudFlare or similar
+
+---
+
+## Security Notes
+
+⚠️ **Change `SECRET_KEY` before production** (line in `app.py`)
+
+⚠️ **Never commit API keys** to GitHub (use env vars only)
+
+⚠️ **CORS is open** (`cors_allowed_origins="*"`) — restrict in production
+
+⚠️ **No authentication** on `/api/` routes — add session checks if exposed
+
+---
+
+## Roadmap
+
+- [ ] Real Gemini Live voice integration (WebRTC)
+- [ ] PDF/image upload support
+- [ ] Database backend for long-term memory
+- [ ] Multi-user sessions (shared state)
+- [ ] Dark/Light theme toggle
+- [ ] Keyboard shortcuts (Cmd/Ctrl+K for command palette)
+- [ ] Export conversation history (JSON/PDF)
+- [ ] Custom tool registration via UI
+- [ ] Mobile app (React Native wrapper)
+
+---
+
+## Contributing
+
+See parent [`jarvis1/` README](../readme.md) for contribution guidelines.
+
+---
+
+## License
+
+Same as parent `jarvis1` repository.
+
+---
+
+**Questions?** Open an issue on GitHub or check the `/docs/` folder.
+
+🚀 **Happy coding!**

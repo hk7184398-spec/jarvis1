@@ -1,9 +1,10 @@
-sounddevice
+﻿sounddevice
 edge-tts
 mcp
 anthropic
 selenium
 PyQt6
+PyQt6-WebEngine
 pdfplumber
 PyPDF2
 pandas

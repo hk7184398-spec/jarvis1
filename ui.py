@@ -3,6 +3,8 @@ from __future__ import annotations
 import math
 import platform
 import random
+import shutil
+import socket
 import subprocess
 import sys
 import threading
@@ -24,10 +26,12 @@ from PyQt6.QtGui import (
 from PyQt6.QtWidgets import (
     QApplication, QFileDialog, QFrame, QHBoxLayout, QLabel, QLineEdit,
     QMainWindow, QPushButton, QScrollArea, QSizePolicy, QTextEdit,
-    QVBoxLayout, QWidget, QProgressBar,
+    QVBoxLayout, QWidget, QProgressBar, QStackedWidget,
 )
 
 from core.config import load_config, update_config
+from core.paths import BASE_DIR
+from dashboard_view import DashboardView
 
 _DEFAULT_W, _DEFAULT_H = 980, 700
 _MIN_W,     _MIN_H     = 820, 580
@@ -71,9 +75,16 @@ class _SysMetrics:
         self.net  = 0.0   
         self.gpu  = -1.0  
         self.tmp  = -1.0  
+        self.battery_pct     = -1.0   # -1 = no battery (desktop)
+        self.battery_plugged = True
+        self.disk_free_gb    = -1.0
+        self.net_online      = True
+        self.git_branch      = ""
+        self.git_dirty       = 0
         self._lock = threading.Lock()
         self._last_net = psutil.net_io_counters()
         self._last_net_t = time.time()
+        self._loop_n = 0
         self._running = True
         t = threading.Thread(target=self._loop, daemon=True)
         t.start()
@@ -110,12 +121,71 @@ class _SysMetrics:
 
         tmp = self._get_temp()
 
+        self._loop_n += 1
+
+        battery_pct, battery_plugged = self._get_battery()
+        disk_free_gb = self._get_disk_free()
+
+        # Network/git checks are slower (subprocess/socket) — run less often.
+        net_online = self.net_online
+        git_branch, git_dirty = self.git_branch, self.git_dirty
+        if self._loop_n % 10 == 1:
+            net_online = self._check_online()
+        if self._loop_n % 20 == 1:
+            git_branch, git_dirty = self._get_git_info()
+
         with self._lock:
             self.cpu = cpu
             self.mem = mem
             self.net = net
             self.gpu = gpu
             self.tmp = tmp
+            self.battery_pct     = battery_pct
+            self.battery_plugged = battery_plugged
+            self.disk_free_gb    = disk_free_gb
+            self.net_online      = net_online
+            self.git_branch      = git_branch
+            self.git_dirty       = git_dirty
+
+    def _get_battery(self) -> tuple[float, bool]:
+        try:
+            b = psutil.sensors_battery()
+            if b is None:
+                return -1.0, True
+            return float(b.percent), bool(b.power_plugged)
+        except Exception:
+            return -1.0, True
+
+    def _get_disk_free(self) -> float:
+        try:
+            usage = shutil.disk_usage(str(Path.home()))
+            return usage.free / (1024 ** 3)
+        except Exception:
+            return -1.0
+
+    def _check_online(self) -> bool:
+        try:
+            with socket.create_connection(("1.1.1.1", 53), timeout=1.0):
+                return True
+        except OSError:
+            return False
+
+    def _get_git_info(self) -> tuple[str, int]:
+        try:
+            br = subprocess.run(
+                ["git", "-C", str(BASE_DIR), "rev-parse", "--abbrev-ref", "HEAD"],
+                capture_output=True, text=True, timeout=2,
+            )
+            branch = br.stdout.strip() if br.returncode == 0 else ""
+
+            st = subprocess.run(
+                ["git", "-C", str(BASE_DIR), "status", "--porcelain"],
+                capture_output=True, text=True, timeout=2,
+            )
+            dirty = len(st.stdout.strip().splitlines()) if st.returncode == 0 else 0
+            return branch, dirty
+        except Exception:
+            return "", 0
 
     def _get_gpu(self) -> float:
         # NVIDIA
@@ -233,6 +303,12 @@ class _SysMetrics:
                 "net": self.net,
                 "gpu": self.gpu,
                 "tmp": self.tmp,
+                "battery_pct":     self.battery_pct,
+                "battery_plugged": self.battery_plugged,
+                "disk_free_gb":    self.disk_free_gb,
+                "net_online":      self.net_online,
+                "git_branch":      self.git_branch,
+                "git_dirty":       self.git_dirty,
             }
 
 
@@ -270,27 +346,10 @@ class HudCanvas(QWidget):
         self._tmr.start(16)
 
     def _load_face(self, path: str):
-        if not path:
-            self._face_px = None
-            return
-
-        candidate = Path(path)
-        if not candidate.exists():
-            self._face_px = None
-            return
-
-        try:
-            pixmap = QPixmap(str(candidate))
-            if not pixmap.isNull():
-                self._face_px = pixmap
-                return
-        except Exception:
-            pass
-
         try:
             from PIL import Image, ImageDraw
             import io
-            img = Image.open(candidate).convert("RGBA")
+            img = Image.open(path).convert("RGBA")
             sz  = min(img.size)
             img = img.resize((sz, sz), Image.LANCZOS)
             mk  = Image.new("L", (sz, sz), 0)
@@ -299,8 +358,9 @@ class HudCanvas(QWidget):
             buf = io.BytesIO()
             img.save(buf, format="PNG")
             px = QPixmap(); px.loadFromData(buf.getvalue())
-            self._face_px = px if not px.isNull() else None
-        except Exception:
+            self._face_px = px
+        except Exception as e:
+            print(f"[UI] ⚠️ Could not load face image '{path}': {e}")
             self._face_px = None
 
     def _step(self):
@@ -1028,7 +1088,7 @@ class MainWindow(QMainWindow):
 
     def __init__(self, face_path: str):
         super().__init__()
-        self.setWindowTitle("J.A.R.V.I.S — Dani")
+        self.setWindowTitle("J.A.R.V.I.S — MARK XXXIX")
         self.setMinimumSize(_MIN_W, _MIN_H)
         self.resize(_DEFAULT_W, _DEFAULT_H)
 
@@ -1065,7 +1125,29 @@ class MainWindow(QMainWindow):
         self._right_panel = self._build_right_panel()
         body.addWidget(self._right_panel, stretch=0)
 
-        root.addLayout(body, stretch=1)
+        # --- radar page (existing HUD UI), wrapped so it can sit in the stack ---
+        radar_page = QWidget()
+        radar_page.setLayout(body)
+
+        # --- dashboard page (new, web-based Brahma-style view) ---
+        self._dashboard = DashboardView()
+        self._dashboard.command_sent.connect(self._on_dashboard_command)
+        self._dashboard.mic_toggled.connect(self._toggle_mute)
+        self._dashboard.radar_requested.connect(self._show_radar_view)
+
+        # Forward every log line to the dashboard too, from one place, so
+        # every existing self._log.append_log(...) call site stays untouched.
+        _orig_append_log = self._log.append_log
+        def _append_log_both(text, _orig=_orig_append_log):
+            _orig(text)
+            self._dashboard.push_log(text)
+        self._log.append_log = _append_log_both
+
+        self._stack = QStackedWidget()
+        self._stack.addWidget(radar_page)      # index 0 — radar/HUD view
+        self._stack.addWidget(self._dashboard) # index 1 — dashboard view
+        root.addWidget(self._stack, stretch=1)
+
         root.addWidget(self._build_footer())
 
         self._clock_tmr = QTimer(self)
@@ -1098,6 +1180,26 @@ class MainWindow(QMainWindow):
         else:
             self.showFullScreen()
 
+    def _toggle_view(self):
+        if self._stack.currentIndex() == 0:
+            self._show_dashboard_view()
+        else:
+            self._show_radar_view()
+
+    def _show_dashboard_view(self):
+        self._stack.setCurrentIndex(1)
+        self._view_toggle_btn.setText("◎ RADAR VIEW")
+        self._dashboard.set_mic(not self._muted)
+        self._dashboard.set_state(self.hud.state if hasattr(self.hud, "state") else "LISTENING")
+
+    def _show_radar_view(self):
+        self._stack.setCurrentIndex(0)
+        self._view_toggle_btn.setText("⊞ DASHBOARD")
+
+    def _on_dashboard_command(self, text: str):
+        self._log.append_log(f"You: {text}")
+        self._dispatch_command(text, source="dashboard")
+
     def resizeEvent(self, event):
         super().resizeEvent(event)
         if self._overlay and self._overlay.isVisible():
@@ -1128,6 +1230,43 @@ class MainWindow(QMainWindow):
             net_str = f"{net:.1f}MB/s"
         net_pct = min(100, net * 10)  # 10 MB/s = %100
         self._bar_net.set_value(net_pct, net_str)
+
+        if hasattr(self, "_dashboard"):
+            self._dashboard.update_metrics(cpu, mem, net_str)
+            self._dashboard.set_daily_brief(self._build_daily_brief(snap))
+            self._dashboard.set_dev_copilot(self._build_dev_copilot(snap))
+
+    def _build_daily_brief(self, snap: dict) -> str:
+        """All real, locally-measured facts — no weather (no weather API
+        wired into Jarvis yet), no fabricated numbers."""
+        hr = time.localtime().tm_hour
+        period = "morning" if hr < 12 else ("afternoon" if hr < 18 else "evening")
+        parts = [f"Good {period}. Everything is online."]
+
+        parts.append(f"CPU is at {snap['cpu']:.0f}%, RAM at {snap['mem']:.0f}%.")
+
+        bp = snap["battery_pct"]
+        if bp >= 0:
+            state = "charging" if snap["battery_plugged"] else "on battery"
+            parts.append(f"Battery is at {bp:.0f}% and {state}.")
+
+        df = snap["disk_free_gb"]
+        if df >= 0:
+            parts.append(f"{df:.0f} GB free on your home drive.")
+
+        parts.append("Internet connectivity is stable." if snap["net_online"]
+                      else "Internet connectivity looks down.")
+
+        return " ".join(parts)
+
+    def _build_dev_copilot(self, snap: dict) -> str:
+        branch = snap.get("git_branch") or ""
+        dirty  = snap.get("git_dirty", 0)
+        loc = f"Watching: {BASE_DIR}"
+        if branch:
+            loc += f" · branch {branch}"
+            loc += f" · {dirty} uncommitted change(s)" if dirty else " · clean"
+        return loc
 
         # GPU
         gpu = snap["gpu"]
@@ -1173,7 +1312,23 @@ class MainWindow(QMainWindow):
             l.setStyleSheet(f"color: {color}; background: transparent;")
             return l
 
-        lay.addWidget(_badge("Dani", C.PRI_DIM))
+        lay.addWidget(_badge("MARK XXXIX", C.PRI_DIM))
+
+        self._view_toggle_btn = QPushButton("⊞ DASHBOARD")
+        self._view_toggle_btn.setFont(QFont("Courier New", 8, QFont.Weight.Bold))
+        self._view_toggle_btn.setCursor(Qt.CursorShape.PointingHandCursor)
+        self._view_toggle_btn.setFixedHeight(24)
+        self._view_toggle_btn.setStyleSheet(f"""
+            QPushButton {{
+                background: {C.PANEL2}; color: {C.PRI};
+                border: 1px solid {C.BORDER_B}; border-radius: 3px;
+                padding: 2px 10px; margin-left: 10px;
+            }}
+            QPushButton:hover {{ background: {C.BORDER}; }}
+        """)
+        self._view_toggle_btn.clicked.connect(self._toggle_view)
+        lay.addWidget(self._view_toggle_btn)
+
         lay.addStretch()
 
         mid = QVBoxLayout(); mid.setSpacing(1)
@@ -1387,7 +1542,7 @@ class MainWindow(QMainWindow):
 
         lay.addWidget(_fl("[F4] Mute  ·  [F11] Fullscreen"))
         lay.addStretch()
-        lay.addWidget(_fl("AdnanAqeel  ·  Dani  ·  CLASSIFIED"))
+        lay.addWidget(_fl("FatihMakes Industries  ·  MARK XXXIX  ·  CLASSIFIED"))
         lay.addStretch()
         lay.addWidget(_fl("© STARK INDUSTRIES", C.PRI_DIM))
         return w
@@ -1413,6 +1568,8 @@ class MainWindow(QMainWindow):
         self._muted = not self._muted
         self.hud.muted = self._muted
         self._style_mute_btn()
+        if hasattr(self, "_dashboard"):
+            self._dashboard.set_mic(not self._muted)
         if self._muted:
             self._apply_state("MUTED")
             self._log.append_log("SYS: Microphone muted.")
@@ -1465,6 +1622,8 @@ class MainWindow(QMainWindow):
     def _apply_state(self, state: str):
         self.hud.state    = state
         self.hud.speaking = (state == "SPEAKING")
+        if hasattr(self, "_dashboard"):
+            self._dashboard.set_state(state)
 
     def _check_config(self) -> bool:
         d = load_config()

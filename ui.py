@@ -270,10 +270,27 @@ class HudCanvas(QWidget):
         self._tmr.start(16)
 
     def _load_face(self, path: str):
+        if not path:
+            self._face_px = None
+            return
+
+        candidate = Path(path)
+        if not candidate.exists():
+            self._face_px = None
+            return
+
+        try:
+            pixmap = QPixmap(str(candidate))
+            if not pixmap.isNull():
+                self._face_px = pixmap
+                return
+        except Exception:
+            pass
+
         try:
             from PIL import Image, ImageDraw
             import io
-            img = Image.open(path).convert("RGBA")
+            img = Image.open(candidate).convert("RGBA")
             sz  = min(img.size)
             img = img.resize((sz, sz), Image.LANCZOS)
             mk  = Image.new("L", (sz, sz), 0)
@@ -282,9 +299,8 @@ class HudCanvas(QWidget):
             buf = io.BytesIO()
             img.save(buf, format="PNG")
             px = QPixmap(); px.loadFromData(buf.getvalue())
-            self._face_px = px
-        except Exception as e:
-            print(f"[UI] ⚠️ Could not load face image '{path}': {e}")
+            self._face_px = px if not px.isNull() else None
+        except Exception:
             self._face_px = None
 
     def _step(self):
@@ -1012,7 +1028,7 @@ class MainWindow(QMainWindow):
 
     def __init__(self, face_path: str):
         super().__init__()
-        self.setWindowTitle("J.A.R.V.I.S — MARK XXXIX")
+        self.setWindowTitle("J.A.R.V.I.S — Dani")
         self.setMinimumSize(_MIN_W, _MIN_H)
         self.resize(_DEFAULT_W, _DEFAULT_H)
 
@@ -1157,7 +1173,7 @@ class MainWindow(QMainWindow):
             l.setStyleSheet(f"color: {color}; background: transparent;")
             return l
 
-        lay.addWidget(_badge("MARK XXXIX", C.PRI_DIM))
+        lay.addWidget(_badge("Dani", C.PRI_DIM))
         lay.addStretch()
 
         mid = QVBoxLayout(); mid.setSpacing(1)
@@ -1371,7 +1387,7 @@ class MainWindow(QMainWindow):
 
         lay.addWidget(_fl("[F4] Mute  ·  [F11] Fullscreen"))
         lay.addStretch()
-        lay.addWidget(_fl("FatihMakes Industries  ·  MARK XXXIX  ·  CLASSIFIED"))
+        lay.addWidget(_fl("AdnanAqeel  ·  Dani  ·  CLASSIFIED"))
         lay.addStretch()
         lay.addWidget(_fl("© STARK INDUSTRIES", C.PRI_DIM))
         return w

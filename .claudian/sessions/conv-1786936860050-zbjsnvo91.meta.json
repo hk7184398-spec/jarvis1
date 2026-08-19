@@ -1,0 +1,13 @@
+{
+  "id": "conv-1786936860050-zbjsnvo91",
+  "providerId": "claude",
+  "title": "hi",
+  "titleGenerationStatus": "failed",
+  "createdAt": 1786936861472,
+  "lastActivityAt": 1786936915210,
+  "sessionId": "124d1e6e-b491-4ede-b374-dac2402d9ffa",
+  "selectedModel": "haiku",
+  "providerState": {
+    "providerSessionId": "124d1e6e-b491-4ede-b374-dac2402d9ffa"
+  }
+}

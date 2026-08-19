@@ -75,7 +75,13 @@ def _json_schema_to_gemini(schema: dict) -> dict:
 
     out = {}
     for key, value in schema.items():
-        if key in ("$schema", "additionalProperties", "title"):
+        if key in (
+            "$schema",
+            "additionalProperties",
+            "additional_properties",
+            "title",
+            "default",
+        ):
             continue
         if key == "type" and isinstance(value, str):
             out["type"] = _TYPE_MAP.get(value.lower(), value.upper())
@@ -83,6 +89,8 @@ def _json_schema_to_gemini(schema: dict) -> dict:
             out["properties"] = {k: _json_schema_to_gemini(v) for k, v in value.items()}
         elif key == "items" and isinstance(value, dict):
             out["items"] = _json_schema_to_gemini(value)
+        elif key in ("anyOf", "oneOf", "allOf") and isinstance(value, list):
+            out[key] = [_json_schema_to_gemini(v) for v in value]
         else:
             out[key] = value
 

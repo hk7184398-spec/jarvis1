@@ -58,6 +58,19 @@ def test_module_level_client_is_built_from_config_file(or_client):
     assert or_client.client.api_key == "test-key"
 
 
+def test_custom_model_pool_can_be_overridden_from_env(tmp_path, monkeypatch):
+    path = tmp_path / "api_keys.json"
+    path.write_text(json.dumps({"openrouter_api_key": "test-key"}), encoding="utf-8")
+    monkeypatch.setattr(core_config, "API_CONFIG_PATH", path)
+    monkeypatch.setattr(core_config, "CONFIG_DIR", tmp_path)
+    monkeypatch.setenv("OPENROUTER_TEXT_MODELS", "model-a:free, model-b:free")
+    sys.modules.pop("or_client", None)
+    import or_client
+
+    assert importlib.reload(or_client).TEXT_MODELS == ["model-a:free", "model-b:free"]
+    sys.modules.pop("or_client", None)
+
+
 def test_client_sets_auth_headers(or_client):
     client = or_client.OpenRouterClient()
     assert client._headers["Authorization"] == "Bearer test-key"

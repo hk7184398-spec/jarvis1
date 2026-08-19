@@ -13,7 +13,18 @@ from core.text import parse_json_response
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger("openrouter_client")
 
-TEXT_MODELS: list[str] = [
+def _normalize_model_list(value: str | None) -> list[str]:
+    if not value:
+        return []
+    cleaned = []
+    for part in value.split(","):
+        model = part.strip().strip('"\'')
+        if model:
+            cleaned.append(model)
+    return cleaned
+
+
+DEFAULT_TEXT_MODELS: list[str] = [
     "nvidia/nemotron-3-super-120b-a12b:free",
     "nousresearch/hermes-3-llama-3.1-405b:free",
     "minimax/minimax-m2.5:free",
@@ -38,7 +49,7 @@ TEXT_MODELS: list[str] = [
     "liquid/lfm-2.5-1.2b-thinking:free",
 ]
 
-VISION_MODELS: list[str] = [
+DEFAULT_VISION_MODELS: list[str] = [
     "nvidia/nemotron-nano-12b-v2-vl:free",
     "nvidia/llama-nemotron-embed-vl-1b-v2:free",
     "google/gemma-4-31b-it:free",
@@ -48,6 +59,13 @@ VISION_MODELS: list[str] = [
     "meta-llama/llama-3.3-70b-instruct:free",
     "nvidia/nemotron-3-super-120b-a12b:free",
 ]
+
+TEXT_MODELS: list[str] = _normalize_model_list(
+    __import__("os").environ.get("OPENROUTER_TEXT_MODELS")
+) or DEFAULT_TEXT_MODELS
+VISION_MODELS: list[str] = _normalize_model_list(
+    __import__("os").environ.get("OPENROUTER_VISION_MODELS")
+) or DEFAULT_VISION_MODELS
 
 API_URL               = "https://openrouter.ai/api/v1/chat/completions"
 DEFAULT_MAX_TOKENS    = 4096

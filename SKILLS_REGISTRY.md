@@ -3,12 +3,14 @@
 <!-- .py file dalo, ya root mein nayi .md file banao — agli baar yahan khud register ho jayegi. -->
 
 # Jarvis Skill & Module Registry
-_Last built: 2026-07-28T09:30:33_
+_Last built: 2026-08-18T02:58:57_
 
 ## Action / Agent Modules
 
 - **actions/browser_control.py** — (no docstring yet — is file mein docstring add karo taake routing behtar ho)
   - functions: browser_control
+- **actions/claude_agent.py** *(TOOL_DECLARATIONS exposed)* — actions/claude_agent.py
+  - functions: ask_claude_action
 - **actions/code_helper.py** — (no docstring yet — is file mein docstring add karo taake routing behtar ho)
   - functions: code_helper
 - **actions/computer_control.py** — (no docstring yet — is file mein docstring add karo taake routing behtar ho)
@@ -19,6 +21,8 @@ _Last built: 2026-07-28T09:30:33_
   - functions: set_wallpaper, set_wallpaper_from_url, get_current_wallpaper, organize_desktop, list_desktop, clean_desktop, get_desktop_stats, desktop_control
 - **actions/dev_agent.py** — (no docstring yet — is file mein docstring add karo taake routing behtar ho)
   - functions: dev_agent
+- **actions/facebook_poster.py** — Facebook Page posting with interactive workflow (text/photo/video).
+  - functions: facebook_post
 - **actions/file_controller.py** — (no docstring yet — is file mein docstring add karo taake routing behtar ho)
   - functions: list_files, create_file, create_folder, delete_file, move_file, copy_file, rename_file, read_file, write_file, find_files, get_largest_files, get_disk_usage
 - **actions/file_processor.py** — file_processor.py — JARVIS Universal File Processor
@@ -27,6 +31,8 @@ _Last built: 2026-07-28T09:30:33_
   - functions: flight_finder
 - **actions/game_updater.py** — (no docstring yet — is file mein docstring add karo taake routing behtar ho)
   - functions: game_updater
+- **actions/gdrive_status_poster.py** *(TOOL_DECLARATIONS exposed)* — Google Drive → WhatsApp Status auto-poster.
+  - functions: load_config, load_state, save_state, load_processed, mark_processed, is_processed, run_poll_cycle, start_watch, stop_watch, trigger_poll_now, get_watch_status, autostart_if_enabled
 - **actions/open_app.py** — (no docstring yet — is file mein docstring add karo taake routing behtar ho)
   - functions: open_app
 - **actions/reminder.py** — (no docstring yet — is file mein docstring add karo taake routing behtar ho)
@@ -43,10 +49,12 @@ _Last built: 2026-07-28T09:30:33_
   - functions: weather_action
 - **actions/web_search.py** — (no docstring yet — is file mein docstring add karo taake routing behtar ho)
   - functions: web_search
-- **actions/website_builder.py** *(TOOL_DECLARATIONS exposed)* — (no docstring yet — is file mein docstring add karo taake routing behtar ho)
-  - functions: build_website
+- **actions/website_builder.py** *(TOOL_DECLARATIONS exposed)* — actions/website_builder.py
+  - functions: build_website, jarvis_tool_generate_website
 - **actions/youtube_video.py** — (no docstring yet — is file mein docstring add karo taake routing behtar ho)
   - functions: youtube_video
+- **actions/tiktok_pipeline/** *(TOOL_DECLARATIONS exposed)* — actions/tiktok_pipeline/ — TikTok Content Automation, V1 Stages 1-4 (full pipeline).
+  - functions: start_tiktok_workflow, get_tiktok_status, continue_tiktok_workflow, finalize_tiktok_video, publish_tiktok_video
 - **agent/error_handler.py** — (no docstring yet — is file mein docstring add karo taake routing behtar ho)
   - functions: analyze_error, generate_fix
 - **agent/executor.py** — (no docstring yet — is file mein docstring add karo taake routing behtar ho)
@@ -60,9 +68,17 @@ _Last built: 2026-07-28T09:30:33_
 - **Architecture.md** (7 chars) — task
 - **Bug.md** (3666 chars) — JARVIS — Bugs
 - **Commands.md** (9551 chars) — JARVIS — Commands
+- **DANI_PROJECTS_INTEGRATION.md** (22668 chars) — 🎯 Dani's Projects Integration Guide
+- **facebook.md** (19985 chars) — Facebook Page Management Guide for Jarvis
+- **FACEBOOK_ANALYSIS_AND_IMPROVEMENTS.md** (12700 chars) — Analysis: Video Workflow vs Current Implementation vs Fixes
+- **FACEBOOK_IMPLEMENTATION_CHECKLIST.md** (13845 chars) — Facebook Posting Implementation Checklist for Jarvis1
+- **GDrive_WhatsApp_Status.md** (3078 chars) — Google Drive → WhatsApp Status Auto-Poster
 - **Ideas.md** (18194 chars) — JARVIS — Ideas & Roadmap
+- **JARVIS1_REFACTOR_GUIDE.md** (25891 chars) — 🤖 JARVIS1 Complete Analysis & Refactoring Guide
 - **JARVIS_SKILLS_MASTER_PROMPT.md** (28114 chars) — JARVIS — Skills System Master Prompt
 - **Modules.md** (31208 chars) — JARVIS — Modules Documentation
+- **PHASE1_MODULE_REGISTRY.md** (29485 chars) — Phase 1: Module Registry & Auto-Discovery Implementation
+- **QUICK_REFERENCE.md** (8437 chars) — Jarvis1 Refactoring Quick Reference
 - **Roadmap.md** (7 chars) — task
 - **Tasks.md** (24963 chars) — JARVIS — Tasks
 - **Viral Clip Extractor.md** (3568 chars) — title: Viral Clip Extractor project: jarvis module: actions/viral_clipper.py status: active type: feature-note created: 2026-07-25 tags: [jarvis, mark-xxxix-or, video, ai, automation, youtube]

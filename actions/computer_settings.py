@@ -1,4 +1,7 @@
 #computer_settings.py
+import json
+import re
+import sys
 import time
 import subprocess
 import platform
@@ -18,9 +21,13 @@ try:
 except ImportError:
     _PYPERCLIP = False
 
-from core.platform_utils import run_first_available
-
 _OS = platform.system()  # "Windows" | "Darwin" | "Linux"
+
+
+def _get_base_dir() -> Path:
+    if getattr(sys, "frozen", False):
+        return Path(sys.executable).parent
+    return Path(__file__).resolve().parent.parent
 
 def _get_macos_wifi_interface() -> str:
     try:
@@ -171,19 +178,6 @@ def minimize_window():
     if _OS == "Darwin": pyautogui.hotkey("command", "m")
     else:               pyautogui.hotkey("win", "down")
 
-def _wmctrl(args: list[str]) -> None:
-    """Runs wmctrl, raising when it is missing or reports a failure."""
-    try:
-        result = subprocess.run(["wmctrl", *args], capture_output=True, text=True)
-    except FileNotFoundError as e:
-        raise RuntimeError("wmctrl is not installed") from e
-    if result.returncode != 0:
-        raise RuntimeError(
-            f"wmctrl {' '.join(args)} exited {result.returncode}: "
-            f"{(result.stderr or result.stdout).strip()[:200]}"
-        )
-
-
 def maximize_window():
     if _OS == "Darwin":
         subprocess.run(["osascript", "-e",
@@ -194,9 +188,9 @@ def maximize_window():
         pyautogui.hotkey("win", "up")
     else:
         try:
-            _wmctrl(["-r", ":ACTIVE:", "-b", "add,maximized_vert,maximized_horz"])
-        except RuntimeError as e:
-            print(f"[Settings] ⚠️ {e} — falling back to keyboard shortcut")
+            subprocess.run(["wmctrl", "-r", ":ACTIVE:", "-b", "add,maximized_vert,maximized_horz"],
+                capture_output=True)
+        except Exception:
             pyautogui.hotkey("super", "up")
 
 def snap_left():
@@ -204,20 +198,20 @@ def snap_left():
         pyautogui.hotkey("win", "left")
     elif _OS == "Linux":
         try:
-            _wmctrl(["-r", ":ACTIVE:", "-e", "0,0,0,960,1080"])
-        except RuntimeError as e:
-            print(f"[Settings] ⚠️ {e} — falling back to keyboard shortcut")
-            pyautogui.hotkey("super", "left")
+            subprocess.run(["wmctrl", "-r", ":ACTIVE:", "-e", "0,0,0,960,1080"],
+                capture_output=True)
+        except Exception:
+            pass
 
 def snap_right():
     if _OS == "Windows":
         pyautogui.hotkey("win", "right")
     elif _OS == "Linux":
         try:
-            _wmctrl(["-r", ":ACTIVE:", "-e", "0,960,0,960,1080"])
-        except RuntimeError as e:
-            print(f"[Settings] ⚠️ {e} — falling back to keyboard shortcut")
-            pyautogui.hotkey("super", "right")
+            subprocess.run(["wmctrl", "-r", ":ACTIVE:", "-e", "0,960,0,960,1080"],
+                capture_output=True)
+        except Exception:
+            pass
 
 def switch_window():
     if _OS == "Darwin": pyautogui.hotkey("command", "tab")
@@ -234,7 +228,10 @@ def open_task_manager():
     elif _OS == "Darwin":
         subprocess.Popen(["open", "-a", "Activity Monitor"])
     else:
-        run_first_available([["gnome-system-monitor"], ["xfce4-taskmanager"], ["htop"]])
+        for cmd in [["gnome-system-monitor"], ["xfce4-taskmanager"], ["htop"]]:
+            if subprocess.run(["which", cmd[0]], capture_output=True).returncode == 0:
+                subprocess.Popen(cmd)
+                break
 
 
 def focus_search():
@@ -359,10 +356,10 @@ def take_screenshot():
     elif _OS == "Darwin":
         pyautogui.hotkey("command", "shift", "3")
     else:
-        if run_first_available(
-            [["scrot"], ["gnome-screenshot"], ["import", "-window", "root", "screenshot.png"]]
-        ):
-            return
+        for cmd in [["scrot"], ["gnome-screenshot"], ["import", "-window", "root", "screenshot.png"]]:
+            if subprocess.run(["which", cmd[0]], capture_output=True).returncode == 0:
+                subprocess.Popen(cmd)
+                return
         pyautogui.hotkey("ctrl", "print_screen")
 
 def lock_screen():
@@ -386,7 +383,10 @@ def open_system_settings():
     elif _OS == "Darwin":
         subprocess.Popen(["open", "-a", "System Preferences"])
     else:
-        run_first_available([["gnome-control-center"], ["xfce4-settings-manager"], ["kcmshell5"]])
+        for cmd in [["gnome-control-center"], ["xfce4-settings-manager"], ["kcmshell5"]]:
+            if subprocess.run(["which", cmd[0]], capture_output=True).returncode == 0:
+                subprocess.Popen(cmd)
+                return
 
 def open_file_explorer():
     if _OS == "Windows":
@@ -394,8 +394,10 @@ def open_file_explorer():
     elif _OS == "Darwin":
         subprocess.Popen(["open", str(Path.home())])
     else:
-        if run_first_available([["nautilus"], ["thunar"], ["dolphin"], ["nemo"]]):
-            return
+        for cmd in [["nautilus"], ["thunar"], ["dolphin"], ["nemo"]]:
+            if subprocess.run(["which", cmd[0]], capture_output=True).returncode == 0:
+                subprocess.Popen(cmd)
+                return
         subprocess.Popen(["xdg-open", str(Path.home())])
 
 def sleep_display():

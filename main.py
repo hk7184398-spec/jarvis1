@@ -57,7 +57,7 @@ from core.skill_registry       import build_registry, prompt_block, read_doc
 from core.mcp_manager           import McpManager  # MCP INTEGRATION
 
 
-LIVE_MODEL          = "models/gemini-2.5-flash-native-audio-preview-12-2025"
+LIVE_MODEL          = "models/gemini-2.5-flash-native-audio-latest"
 CHANNELS            = 1
 SEND_SAMPLE_RATE    = 16000
 RECEIVE_SAMPLE_RATE = 24000
@@ -109,6 +109,51 @@ def _load_system_prompt() -> str:
     return prompt
     
 _last_memory_input = ""
+
+
+_UNSUPPORTED_GEMINI_SCHEMA_KEYS = {
+    "$schema",
+    "additionalProperties",
+    "additional_properties",
+    "title",
+    "default",
+    "examples",
+    "nullable",
+}
+
+
+def _sanitize_gemini_schema(value):
+    """Recursively strip JSON Schema metadata that Gemini Live rejects.
+
+    Some tool declarations come from third-party MCP servers, while others are
+    manually defined here. In both cases Gemini accepts a narrower subset than
+    standard JSON Schema, so we clean the payload right before it is sent.
+    """
+    if isinstance(value, dict):
+        cleaned = {}
+        for key, item in value.items():
+            if key in _UNSUPPORTED_GEMINI_SCHEMA_KEYS:
+                continue
+            if key in {"properties", "patternProperties"} and isinstance(item, dict):
+                cleaned[key] = {
+                    nested_key: _sanitize_gemini_schema(nested_value)
+                    for nested_key, nested_value in item.items()
+                }
+            elif key in {"items", "additionalItems", "not", "contains", "if", "then", "else"}:
+                cleaned[key] = _sanitize_gemini_schema(item)
+            elif key in {"anyOf", "allOf", "oneOf"} and isinstance(item, list):
+                cleaned[key] = [_sanitize_gemini_schema(v) for v in item]
+            else:
+                cleaned[key] = _sanitize_gemini_schema(item)
+        return cleaned
+    if isinstance(value, list):
+        return [_sanitize_gemini_schema(item) for item in value]
+    return value
+
+
+def _sanitize_tool_declarations(tool_declarations):
+    return [_sanitize_gemini_schema(decl) for decl in tool_declarations]
+
 
 def _update_memory_async(user_text: str, jarvis_text: str) -> None:
     global _last_memory_input
@@ -704,12 +749,14 @@ class JarvisLive:
             parts.append(mem_str)
         parts.append(sys_prompt)
 
+        sanitized_tools = _sanitize_tool_declarations(TOOL_DECLARATIONS)
+
         return types.LiveConnectConfig(
             response_modalities=["AUDIO"],
             output_audio_transcription={},
             input_audio_transcription={},
             system_instruction="\n".join(parts),
-            tools=[{"function_declarations": TOOL_DECLARATIONS}],
+            tools=[{"function_declarations": sanitized_tools}],
             session_resumption=types.SessionResumptionConfig(),
             speech_config=types.SpeechConfig(
                 voice_config=types.VoiceConfig(

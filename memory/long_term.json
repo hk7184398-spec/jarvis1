@@ -24,7 +24,7 @@
     },
     "preferred_greeting": {
       "value": "salam",
-      "updated": "2026-07-15"
+      "updated": "2026-08-19"
     },
     "language": {
       "value": "Thai",
@@ -63,6 +63,10 @@
     "project_completed": {
       "value": "Project completed successfully",
       "updated": "2026-07-16"
+    },
+    "Jarvis Project Web Interface": {
+      "value": "Create and integrate a new HTML web interface replicating the screenshot functionality for the jarvis1 repo, including localhost setup and future domain planning.",
+      "updated": "2026-08-19"
     }
   },
   "relationships": {
@@ -88,6 +92,10 @@
     "told_jokes": {
       "value": "Told two jokes in Urdu",
       "updated": "2026-07-15"
+    },
+    "financial_focus": {
+      "value": "Switched from crypto to forex due to significant losses ('diwaliya').",
+      "updated": "2026-08-19"
     }
   }
 }

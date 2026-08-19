@@ -1,6 +1,7 @@
 #desktop.py
-import ast
 import os
+import sys
+import json
 import shutil
 import subprocess
 import tempfile
@@ -14,10 +15,20 @@ try:
 except ImportError:
     _PYAUTOGUI = False
 
-from core.platform_utils import get_desktop_dir as _get_desktop
-from core.text import strip_code_fences
-
 _OS = platform.system()  # "Windows" | "Darwin" | "Linux"
+
+
+def _get_base_dir() -> Path:
+    if getattr(sys, "frozen", False):
+        return Path(sys.executable).parent
+    return Path(__file__).resolve().parent.parent
+
+def _get_desktop() -> Path:
+    if _OS == "Linux":
+        xdg = os.environ.get("XDG_DESKTOP_DIR", "")
+        if xdg and Path(xdg).exists():
+            return Path(xdg)
+    return Path.home() / "Desktop"
 
 def _build_sandbox() -> dict:
     import time
@@ -27,7 +38,7 @@ def _build_sandbox() -> dict:
         "len": len, "str": str, "int": int, "float": float,
         "bool": bool, "list": list, "dict": dict, "tuple": tuple,
         "range": range, "enumerate": enumerate, "sorted": sorted,
-        "isinstance": isinstance, "hasattr": hasattr,
+        "isinstance": isinstance, "hasattr": hasattr, "getattr": getattr,
         "max": max, "min": min, "sum": sum, "abs": abs,
         "zip": zip, "map": map, "filter": filter,
     }
@@ -64,56 +75,21 @@ def _build_sandbox() -> dict:
     return sandbox
 
 
-_FORBIDDEN_CALLS = {
-    "eval", "exec", "compile", "open", "input", "__import__",
-    "getattr", "setattr", "delattr", "globals", "locals", "vars", "breakpoint",
-}
-
-
-def _validate_generated_code(code: str) -> str | None:
-    """Returns a reason why the code is rejected, or None when it is acceptable.
-
-    A restricted exec namespace is not a boundary on its own: dunder attribute
-    walks such as ``().__class__.__mro__`` reach arbitrary builtins from inside it.
-    """
-    try:
-        tree = ast.parse(code)
-    except SyntaxError as e:
-        return f"syntax error: {e}"
-
-    for node in ast.walk(tree):
-        if isinstance(node, (ast.Import, ast.ImportFrom)):
-            return "import statements are not allowed"
-        if isinstance(node, ast.Attribute) and node.attr.startswith("__"):
-            return f"dunder attribute access is not allowed: {node.attr}"
-        if isinstance(node, ast.Name) and node.id.startswith("__"):
-            return f"dunder name access is not allowed: {node.id}"
-        if isinstance(node, ast.Constant) and isinstance(node.value, str) \
-                and node.value.startswith("__") and node.value.endswith("__"):
-            return "dunder string literals are not allowed"
-        if isinstance(node, ast.Call) and isinstance(node.func, ast.Name) \
-                and node.func.id in _FORBIDDEN_CALLS:
-            return f"call to {node.func.id}() is not allowed"
-    return None
-
-
 def _execute_generated_code(code: str, player=None) -> str:
     if not code or code.strip() == "UNSAFE":
         return "This action cannot be performed safely."
 
-    code = strip_code_fences(code)
-
-    reason = _validate_generated_code(code)
-    if reason:
-        print(f"[Desktop] Blocked generated code ({reason})\nCode:\n{code[:300]}")
-        return "This action cannot be performed safely."
+    # Kod temizleme
+    if code.startswith("```"):
+        lines = code.split("\n")
+        code  = "\n".join(lines[1:-1]).strip()
 
     sandbox      = _build_sandbox()
     output_lines = []
     sandbox["__builtins__"]["print"] = lambda *a: output_lines.append(" ".join(str(x) for x in a))
 
     try:
-        exec(compile(code, "<jarvis_desktop>", "exec"), sandbox)
+        exec(compile(code, "<brahma_desktop>", "exec"), sandbox)
         return "\n".join(output_lines) if output_lines else "Done."
     except Exception as e:
         print(f"[Desktop] Exec error: {e}\nCode:\n{code[:300]}")
@@ -245,8 +221,8 @@ def set_wallpaper_from_url(url: str) -> str:
         result = set_wallpaper(str(tmp))
         try:
             tmp.unlink()
-        except OSError as e:
-            print(f"[Desktop] ⚠️ Could not delete temp file {tmp}: {e}")
+        except Exception:
+            pass
         return result
     except Exception as e:
         return f"Could not download wallpaper: {e}"

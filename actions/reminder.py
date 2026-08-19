@@ -1,11 +1,9 @@
 # actions/reminder.py
 
-import json
 import subprocess
 import os
 import sys
 from datetime import datetime
-from xml.sax.saxutils import escape as xml_escape
 
 
 def reminder(
@@ -40,12 +38,7 @@ def reminder(
             return "That time is already in the past."
 
         task_name    = f"MARKReminder_{target_dt.strftime('%Y%m%d_%H%M')}"
-        # Collapse newlines/control chars, then embed as a literal so the message
-        # can never escape the generated script or the task XML.
-        plain_message   = "".join(
-            ch if ch.isprintable() else " " for ch in str(message)
-        ).strip()[:200] or "Reminder"
-        message_literal = json.dumps(plain_message)
+        safe_message = message.replace('"', '').replace("'", "").strip()[:200]
 
         python_exe = sys.executable
         if python_exe.lower().endswith("python.exe"):
@@ -74,14 +67,14 @@ try:
     from win10toast import ToastNotifier
     ToastNotifier().show_toast(
         "MARK Reminder",
-        {message_literal},
+        "{safe_message}",
         duration=15,
         threaded=False
     )
 except Exception:
     try:
         import subprocess
-        subprocess.run(["msg", "*", "/TIME:30", {message_literal}])
+        subprocess.run(["msg", "*", "/TIME:30", "{safe_message}"], shell=True)
     except Exception:
         pass
 
@@ -97,7 +90,7 @@ except Exception:
         xml_content = f'''<?xml version="1.0" encoding="UTF-16"?>
 <Task version="1.2" xmlns="http://schemas.microsoft.com/windows/2004/02/mit/task">
   <RegistrationInfo>
-    <Description>MARK Reminder: {xml_escape(plain_message)}</Description>
+    <Description>MARK Reminder: {safe_message}</Description>
   </RegistrationInfo>
   <Triggers>
     <TimeTrigger>
@@ -133,28 +126,23 @@ except Exception:
             f.write(xml_content)
 
         result = subprocess.run(
-            ["schtasks", "/Create", "/TN", task_name, "/XML", xml_path, "/F"],
-            capture_output=True, text=True
+            f'schtasks /Create /TN "{task_name}" /XML "{xml_path}" /F',
+            shell=True, capture_output=True, text=True
         )
 
         try:
             os.remove(xml_path)
-        except OSError as e:
-            print(f"[Reminder] ⚠️ Could not delete temp file {xml_path}: {e}")
+        except Exception:
+            pass
 
         if result.returncode != 0:
             err = result.stderr.strip() or result.stdout.strip()
             print(f"[Reminder] ❌ schtasks failed: {err}")
             try:
                 os.remove(notify_script)
-            except OSError as cleanup_err:
-                print(
-                    f"[Reminder] ⚠️ Could not delete {notify_script}: {cleanup_err}"
-                )
-            return (
-                f"I couldn't schedule the reminder due to a system error: "
-                f"{err[:200]}"
-            )
+            except Exception:
+                pass
+            return "I couldn't schedule the reminder due to a system error."
 
         if player:
             player.write_log(f"[reminder] set for {date_str} {time_str}")

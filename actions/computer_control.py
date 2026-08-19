@@ -4,6 +4,7 @@ import json
 import re
 import string
 import subprocess
+import sys
 import time
 import random
 from pathlib import Path
@@ -22,15 +23,31 @@ try:
 except ImportError:
     _PYPERCLIP = False
 
-from core.config import get_os as _get_os
-from core.paths import MEMORY_PATH as _MEMORY_PATH
+def _base_dir() -> Path:
+    if getattr(sys, "frozen", False):
+        return Path(sys.executable).parent
+    return Path(__file__).resolve().parent.parent
+
+
+_BASE         = _base_dir()
+_CONFIG_PATH  = _BASE / "config" / "api_keys.json"
+_MEMORY_PATH  = _BASE / "memory" / "long_term.json"
+
+def _load_config() -> dict:
+    try:
+        return json.loads(_CONFIG_PATH.read_text(encoding="utf-8"))
+    except Exception:
+        return {}
+
+def _get_os() -> str:
+    return _load_config().get("os_system", "windows").lower()
 
 _SAFE_SCREENSHOT_ROOTS = (
     Path.home(),
 )
 
 def _safe_screenshot_path(requested: str | None) -> Path:
-    fallback = Path.home() / "Desktop" / "jarvis_screenshot.png"
+    fallback = Path.home() / "Desktop" / "brahma_screenshot.png"
     if not requested:
         return fallback
     try:
@@ -39,12 +56,8 @@ def _safe_screenshot_path(requested: str | None) -> Path:
             if p.is_relative_to(root.resolve()):
                 p.parent.mkdir(parents=True, exist_ok=True)
                 return p
-        print(
-            f"[Control] ⚠️ '{requested}' is outside the home directory — "
-            f"saving to {fallback} instead"
-        )
-    except OSError as e:
-        print(f"[Control] ⚠️ Cannot use '{requested}' ({e}) — saving to {fallback}")
+    except Exception:
+        pass
     return fallback
 
 def _require_pyautogui():
@@ -122,8 +135,8 @@ def _user_profile() -> dict:
             data     = json.loads(_MEMORY_PATH.read_text(encoding="utf-8"))
             identity = data.get("identity", {})
             return {k: v.get("value", "") for k, v in identity.items()}
-    except (OSError, json.JSONDecodeError, UnicodeDecodeError, AttributeError) as e:
-        print(f"[Control] ⚠️ Could not read identity from memory: {e}")
+    except Exception:
+        pass
     return {}
 
 def _type(text: str, interval: float = 0.03) -> str:
@@ -224,22 +237,12 @@ def _clear_field() -> str:
     pyautogui.press("delete")
     return "Field cleared"
 
-def _ps_literal(value: str) -> str:
-    """Single-quoted PowerShell string literal ('' escapes an embedded quote)."""
-    return "'" + str(value).replace("'", "''") + "'"
-
-
-def _applescript_literal(value: str) -> str:
-    escaped = str(value).replace("\\", "\\\\").replace('"', '\\"')
-    return f'"{escaped}"'
-
-
 def _focus_window(title: str) -> str:
     os_name = _get_os()
 
     if os_name == "windows":
         try:
-            script = f'(New-Object -ComObject WScript.Shell).AppActivate({_ps_literal(title)})'
+            script = f'(New-Object -ComObject WScript.Shell).AppActivate("{title}")'
             subprocess.run(
                 ["powershell", "-NoProfile", "-NonInteractive", "-Command", script],
                 capture_output=True, timeout=5,
@@ -252,8 +255,7 @@ def _focus_window(title: str) -> str:
     if os_name == "mac":
         script = (
             f'tell application "System Events" to '
-            f'set frontmost of (first process whose name contains '
-            f'{_applescript_literal(title)}) to true'
+            f'set frontmost of (first process whose name contains "{title}") to true'
         )
         try:
             subprocess.run(

@@ -1,9 +1,28 @@
 #web_search.py
-from core.gemini import get_genai_client
+import json
+import sys
+import warnings
+from pathlib import Path
+
+def _get_base_dir() -> Path:
+    if getattr(sys, "frozen", False):
+        return Path(sys.executable).parent
+    return Path(__file__).resolve().parent.parent
+
+
+BASE_DIR        = _get_base_dir()
+API_CONFIG_PATH = BASE_DIR / "config" / "api_keys.json"
+
+
+def _get_api_key() -> str:
+    with open(API_CONFIG_PATH, "r", encoding="utf-8") as f:
+        return json.load(f)["gemini_api_key"]
 
 
 def _gemini_search(query: str) -> str:
-    client   = get_genai_client()
+    from google import genai
+
+    client   = genai.Client(api_key=_get_api_key())
     response = client.models.generate_content(
         model="gemini-2.5-flash",
         contents=query,
@@ -25,7 +44,13 @@ def _ddg_search(query: str, max_results: int = 6) -> list[dict]:
     try:
         from ddgs import DDGS
     except ImportError:
-        from duckduckgo_search import DDGS
+        with warnings.catch_warnings():
+            warnings.filterwarnings(
+                "ignore",
+                category=RuntimeWarning,
+                message=r"This package .* has been renamed to .*",
+            )
+            from duckduckgo_search import DDGS
 
     results = []
     with DDGS() as ddgs:
@@ -97,22 +122,49 @@ def web_search(
     if player:
         player.write_log(f"[Search] {query or ', '.join(items)}")
 
-    print(f"[WebSearch] 🔍 Query: {query!r}  Mode: {mode}")
-    try:
-        from or_client import client
-        result = client.chat(
-            query,
-            system="You are a web search assistant. Answer factually and concisely."
-        )
-        print("[WebSearch] ✅ OpenRouter OK.")
-        return result
-    except Exception as e:
-        print(f"[WebSearch] ⚠️ OpenRouter failed ({e}) — trying DDG...")
+    print(f"[WebSearch] Query: {query!r}  Mode: {mode}")
+    if mode == "compare":
         try:
-            results = _ddg_search(query)
-            result = _format_ddg(query, results)
-            print(f"[WebSearch] ✅ DDG: {len(results)} result(s).")
+            result = _compare(items or ([query] if query else []), aspect)
+            print("[WebSearch] Gemini compare OK.")
             return result
-        except Exception as ddg_err:
-            print(f"[WebSearch] ❌ All backends failed: {ddg_err}")
-            return f"Search failed, sir: {ddg_err}"
+        except Exception as e:
+            print(f"[WebSearch] Gemini compare failed ({e}) - trying DDG...")
+            all_results: dict[str, list] = {}
+            for item in items or ([query] if query else []):
+                try:
+                    all_results[item] = _ddg_search(f"{item} {aspect}", max_results=3)
+                except Exception:
+                    all_results[item] = []
+
+            lines = [f"Comparison — {aspect.upper()}", "─" * 40]
+            for item in items or ([query] if query else []):
+                lines.append(f"\n▸ {item}")
+                for r in all_results.get(item, [])[:2]:
+                    if r.get("snippet"):
+                        lines.append(f"  • {r['snippet']}")
+            return "\n".join(lines).strip()
+
+    try:
+        results = _ddg_search(query)
+        if results:
+            result = _format_ddg(query, results)
+            print(f"[WebSearch] DDG OK: {len(results)} result(s).")
+            return result
+        print("[WebSearch] DDG returned no results, trying Gemini...")
+    except Exception as e:
+        print(f"[WebSearch] DDG search failed ({e}) - trying Gemini...")
+        try:
+            result = _gemini_search(query)
+            print("[WebSearch] Gemini search OK.")
+            return result
+        except Exception as gemini_error:
+            print(f"[WebSearch] Gemini search failed ({gemini_error})")
+            return f"Search failed, sir: {gemini_error}"
+
+    try:
+        result = _gemini_search(query)
+        print("[WebSearch] Gemini search OK.")
+        return result
+    except Exception:
+        return _format_ddg(query, results)

@@ -1,7 +1,7 @@
 """
 actions/viral_clipper.py
 --------------------------------------------------------
-Jarvis (Mark-XXXIX-OR) module: Viral Clip Extractor
+Jarvis AI - Lite module: Viral Clip Extractor
 
 Kya karta hai:
   1. Video source lo -> YouTube/kisi bhi video URL (yt-dlp) YA local file path

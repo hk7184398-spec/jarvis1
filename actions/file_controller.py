@@ -6,7 +6,18 @@ from pathlib import Path
 from datetime import datetime
 import send2trash
 
-from core.platform_utils import get_desktop_dir as _get_desktop
+_FILE_TYPE_MAP = {
+    "Images":    [".jpg", ".jpeg", ".png", ".gif", ".bmp", ".webp", ".svg", ".ico"],
+    "Documents": [".pdf", ".doc", ".docx", ".txt", ".xls", ".xlsx", ".ppt", ".pptx", ".csv"],
+    "Videos":    [".mp4", ".avi", ".mkv", ".mov", ".wmv", ".flv", ".webm"],
+    "Music":     [".mp3", ".wav", ".flac", ".aac", ".ogg", ".wma"],
+    "Archives":  [".zip", ".rar", ".7z", ".tar", ".gz"],
+    "Code":      [".py", ".js", ".html", ".css", ".json", ".xml", ".ts", ".cpp", ".java"],
+}
+
+def _get_desktop() -> Path:
+    """Returns desktop path — works on Windows, Mac, Linux."""
+    return Path.home() / "Desktop"
 
 
 def _get_downloads() -> Path:
@@ -19,7 +30,7 @@ def _resolve_path(raw: str) -> Path:
     Supports shortcuts: 'desktop', 'downloads', 'documents', 'home'
     """
     shortcuts = {
-        "desktop":   _get_desktop(),
+        "desktop":   Path.home() / "Desktop",
         "downloads": Path.home() / "Downloads",
         "documents": Path.home() / "Documents",
         "pictures":  Path.home() / "Pictures",
@@ -104,10 +115,11 @@ def delete_file(path: str, confirm: bool = True) -> str:
             return f"Not found: {path}"
 
         try:
+
             send2trash.send2trash(str(target))
             return f"Moved to Recycle Bin: {target.name}"
-        except Exception as e:
-            print(f"[Files] ⚠️ Recycle Bin unavailable ({e}) — deleting permanently")
+        except ImportError:
+            pass
 
         # Fallback: permanent delete
         if target.is_dir():
@@ -361,6 +373,69 @@ def organize_desktop() -> str:
         return f"Could not organize desktop: {e}"
 
 
+def _organize_directory(target_path: str, mode: str = "by_type") -> str:
+    """Organizes files in a directory by type or by date."""
+    try:
+        target_dir = _resolve_path(target_path)
+        if not target_dir.exists():
+            return f"Path not found: {target_dir}"
+        if not target_dir.is_dir():
+            return f"Not a directory: {target_dir}"
+
+        moved = []
+        skipped = []
+
+        for item in sorted(target_dir.iterdir()):
+            if item.is_dir() or item.name.startswith("."):
+                continue
+
+            if mode == "by_date":
+                folder_name = datetime.fromtimestamp(item.stat().st_mtime).strftime("%Y-%m")
+            else:
+                ext = item.suffix.lower()
+                folder_name = "Others"
+                for folder, extensions in _FILE_TYPE_MAP.items():
+                    if ext in extensions:
+                        folder_name = folder
+                        break
+
+            dest_dir = target_dir / folder_name
+            dest_dir.mkdir(exist_ok=True)
+            new_path = dest_dir / item.name
+
+            if new_path.exists():
+                skipped.append(item.name)
+                continue
+
+            shutil.move(str(item), str(new_path))
+            moved.append(f"{item.name} -> {dest_dir.name}/")
+
+        label = "Desktop" if target_dir == _get_desktop() else target_dir.name
+        if not moved and not skipped:
+            return f"{label} scanned ({mode}). No files to organize."
+
+        result = f"{label} organized ({mode}). {len(moved)} file(s) moved."
+        if moved:
+            result += "\n" + "\n".join(moved[:10])
+            if len(moved) > 10:
+                result += f"\n... and {len(moved) - 10} more."
+        if skipped:
+            result += f"\n{len(skipped)} file(s) skipped because a same-named file already exists."
+
+        return result
+
+    except Exception as e:
+        return f"Could not organize folder: {e}"
+
+
+def organize_desktop() -> str:
+    return _organize_directory(str(_get_desktop()), mode="by_type")
+
+
+def organize_folder(path: str, mode: str = "by_type") -> str:
+    return _organize_directory(path, mode=mode)
+
+
 def get_file_info(path: str) -> str:
     """Returns detailed information about a file."""
     try:
@@ -462,6 +537,12 @@ def file_controller(
 
         elif action == "organize_desktop":
             result = organize_desktop()
+
+        elif action == "organize_folder":
+            result = organize_folder(
+                path=path,
+                mode=parameters.get("mode", "by_type")
+            )
 
         elif action == "info":
             full = _full_path(path, name)

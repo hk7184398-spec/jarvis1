@@ -21,7 +21,7 @@ from google.genai import types
 from core.config import load_config, update_config
 from core.gemini import get_genai_client
 
-LIVE_MODEL          = "models/gemini-2.5-flash-native-audio-preview-12-2025"
+LIVE_MODEL          = "models/gemini-2.5-flash-native-audio-latest"
 CHANNELS            = 1
 RECEIVE_SAMPLE_RATE = 24000
 CHUNK_SIZE          = 1024

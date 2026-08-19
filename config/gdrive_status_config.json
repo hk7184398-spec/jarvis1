@@ -1,5 +1,5 @@
 {
-  "gdrive_folder_id": "<< PASTE YOUR GOOGLE DRIVE FOLDER LINK / ID HERE >>",
+  "gdrive_folder_id": "<< https://drive.google.com/drive/folders/1y-ltn8FG3jT6E4uhhn9Sa53o5w_RdZhZ?usp=drive_link >>",
   "gdrive_service_account_path": "config/gdrive_service_account.json",
   "poll_interval_seconds": 300,
   "delay_between_posts_seconds": 60,

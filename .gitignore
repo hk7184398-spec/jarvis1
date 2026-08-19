@@ -20,3 +20,28 @@ memory/gdrive_watch_state.json
 memory/gdrive_processed_products.json
 logs/gdrive_whatsapp_status.log
 temp/gdrive_status_downloads/
+# Downloaded/temp files
+download Jarvis One/
+binance trading bot/
+fix_website_builder.py
+daily_briefing.py
+image_upload_interface.html
+index.html
+script.js
+style.css
+
+# OS/IDE
+.DS_Store
+__pycache__/
+*.pyc
+.venv/
+venv/
+*.egg-info/
+
+# Config with secrets
+config/api_keys.json
+
+# Temp/build
+*.tmp
+dist/
+build/

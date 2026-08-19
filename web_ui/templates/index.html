@@ -1,0 +1,227 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>J.A.R.V.I.S. - Web Interface</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+</head>
+<body class="jarvis-dark">
+    <div class="jarvis-container">
+        <!-- HEADER -->
+        <header class="jarvis-header">
+            <div class="header-left">
+                <div class="logo-mark">◈</div>
+                <div class="header-title">J.A.R.V.I.S.</div>
+                <span class="subtitle">v1.0 WEB</span>
+            </div>
+            <div class="header-center">
+                <div class="listening-indicator" id="listening-indicator">
+                    <div class="pulse"></div>
+                    <span>STANDBY</span>
+                </div>
+            </div>
+            <div class="header-right">
+                <button class="header-btn" id="settings-btn" title="Settings">
+                    <span>⚙️</span>
+                </button>
+                <button class="header-btn" id="menu-btn" title="Menu">
+                    <span>☰</span>
+                </button>
+            </div>
+        </header>
+
+        <!-- MAIN BODY (3-panel layout) -->
+        <div class="jarvis-body">
+            <!-- LEFT PANEL -->
+            <aside class="left-panel">
+                <div class="panel-header">STATUS</div>
+                
+                <div class="status-card">
+                    <div class="status-label">CPU</div>
+                    <div class="status-bar">
+                        <div class="status-fill cpu-fill" id="cpu-meter"></div>
+                    </div>
+                    <div class="status-value" id="cpu-value">0%</div>
+                </div>
+
+                <div class="status-card">
+                    <div class="status-label">MEMORY</div>
+                    <div class="status-bar">
+                        <div class="status-fill mem-fill" id="mem-meter"></div>
+                    </div>
+                    <div class="status-value" id="mem-value">0%</div>
+                </div>
+
+                <div class="status-card">
+                    <div class="status-label">DISK</div>
+                    <div class="status-bar">
+                        <div class="status-fill disk-fill" id="disk-meter"></div>
+                    </div>
+                    <div class="status-value" id="disk-value">0%</div>
+                </div>
+
+                <div class="divider"></div>
+
+                <div class="info-block">
+                    <div class="info-label">Connection</div>
+                    <div class="info-value online" id="conn-status">ONLINE</div>
+                </div>
+
+                <div class="info-block">
+                    <div class="info-label">Memory Loaded</div>
+                    <div class="info-value" id="mem-loaded">0 events</div>
+                </div>
+
+                <div class="info-block">
+                    <div class="info-label">Active Sessions</div>
+                    <div class="info-value" id="sessions-count">1</div>
+                </div>
+
+                <div class="divider"></div>
+
+                <button class="action-btn primary" id="voice-btn">
+                    🎤 VOICE
+                </button>
+                <button class="action-btn" id="listen-btn">
+                    📡 LISTEN
+                </button>
+            </aside>
+
+            <!-- CENTER PANEL (HUD) -->
+            <main class="center-panel">
+                <div class="hud-container">
+                    <!-- Radar visualization -->
+                    <svg class="radar" id="radar-canvas" viewBox="0 0 400 400">
+                        <defs>
+                            <radialGradient id="radarGrad" cx="50%" cy="50%" r="50%">
+                                <stop offset="0%" style="stop-color:#001f2e;stop-opacity:0.3" />
+                                <stop offset="100%" style="stop-color:#000d14;stop-opacity:0.8" />
+                            </radialGradient>
+                        </defs>
+                        
+                        <!-- Background -->
+                        <rect width="400" height="400" fill="url(#radarGrad)"/>
+                        
+                        <!-- Concentric circles -->
+                        <circle cx="200" cy="200" r="150" fill="none" stroke="#007a99" stroke-width="1" opacity="0.3"/>
+                        <circle cx="200" cy="200" r="100" fill="none" stroke="#007a99" stroke-width="1" opacity="0.5"/>
+                        <circle cx="200" cy="200" r="50" fill="none" stroke="#00d4ff" stroke-width="1" opacity="0.7"/>
+                        
+                        <!-- Crosshairs -->
+                        <line x1="200" y1="50" x2="200" y2="350" stroke="#00d4ff" stroke-width="0.5" opacity="0.3"/>
+                        <line x1="50" y1="200" x2="350" y2="200" stroke="#00d4ff" stroke-width="0.5" opacity="0.3"/>
+                        
+                        <!-- Rotating sweep -->
+                        <g id="sweep-group">
+                            <line x1="200" y1="200" x2="200" y2="50" stroke="#00d4ff" stroke-width="1" opacity="0.4"/>
+                        </g>
+                        
+                        <!-- Data points (animated) -->
+                        <circle class="radar-point" cx="200" cy="150" r="4" fill="#00ff88"/>
+                        <circle class="radar-point" cx="280" cy="200" r="3" fill="#ff6b00"/>
+                        <circle class="radar-point" cx="200" cy="280" r="3" fill="#ffcc00"/>
+                    </svg>
+
+                    <!-- Activity feed below radar -->
+                    <div class="activity-log" id="activity-log">
+                        <div class="log-header">ACTIVITY LOG</div>
+                        <div class="log-content" id="log-content">
+                            <div class="log-entry info">System initialized</div>
+                            <div class="log-entry success">Ready for input</div>
+                        </div>
+                    </div>
+                </div>
+            </main>
+
+            <!-- RIGHT PANEL -->
+            <aside class="right-panel">
+                <div class="panel-header">INTERACTION</div>
+
+                <!-- Message input -->
+                <div class="input-section">
+                    <textarea 
+                        class="message-input" 
+                        id="message-input" 
+                        placeholder="Enter command or ask a question..."
+                        rows="4"
+                    ></textarea>
+                    <button class="send-btn" id="send-btn">
+                        SEND
+                    </button>
+                </div>
+
+                <div class="divider"></div>
+
+                <!-- Response display -->
+                <div class="response-section">
+                    <div class="section-label">RESPONSE</div>
+                    <div class="response-box" id="response-box">
+                        <div class="placeholder">Awaiting input...</div>
+                    </div>
+                </div>
+
+                <div class="divider"></div>
+
+                <!-- Quick actions -->
+                <div class="quick-actions">
+                    <div class="section-label">QUICK ACTIONS</div>
+                    <button class="quick-btn" data-tool="weather">
+                        🌤️ Weather
+                    </button>
+                    <button class="quick-btn" data-tool="time">
+                        🕐 Time
+                    </button>
+                    <button class="quick-btn" data-tool="memory">
+                        📚 Memory
+                    </button>
+                    <button class="quick-btn" data-tool="status">
+                        📊 Status
+                    </button>
+                </div>
+            </aside>
+        </div>
+
+        <!-- FOOTER -->
+        <footer class="jarvis-footer">
+            <div class="footer-left">
+                <span class="git-badge" id="git-info">BRANCH: main</span>
+            </div>
+            <div class="footer-center">
+                <span class="model-badge" id="model-info">MODEL: Loading...</span>
+            </div>
+            <div class="footer-right">
+                <span class="timestamp" id="timestamp">--:--:--</span>
+            </div>
+        </footer>
+    </div>
+
+    <!-- Initialization Modal -->
+    <div class="modal" id="init-modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2>Initialize J.A.R.V.I.S.</h2>
+            </div>
+            <div class="modal-body">
+                <label>
+                    <span>Gemini API Key</span>
+                    <input type="password" id="gemini-key-input" placeholder="sk-...">
+                </label>
+                <label>
+                    <span>OpenRouter API Key</span>
+                    <input type="password" id="openrouter-key-input" placeholder="sk-...">
+                </label>
+            </div>
+            <div class="modal-footer">
+                <button class="btn-secondary" id="init-cancel">Cancel</button>
+                <button class="btn-primary" id="init-confirm">Initialize</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Scripts -->
+    <script src="https://cdn.socket.io/4.5.4/socket.io.min.js"></script>
+    <script src="{{ url_for('static', filename='js/websocket.js') }}"></script>
+    <script src="{{ url_for('static', filename='js/main.js') }}"></script>
+</body>
+</html>

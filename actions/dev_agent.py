@@ -34,6 +34,18 @@ def _classify_error(output: str) -> str:
 
     low = output.lower()
 
+    # Interpreter/launcher-level failures — these never raise a Python
+    # traceback (the interpreter dies before running any user code), so
+    # they were previously falling through every pattern below and getting
+    # classified as "none". That's what let a genuinely broken build (entry
+    # point missing/misnamed) get reported as "working, sir".
+    if any(x in low for x in (
+        "can't open file", "cannot open file", "no such file or directory",
+        "is not recognized as an internal or external command",
+        "command not found",
+    )):
+        return "launcher_error"
+
     if any(x in low for x in ("no module named", "modulenotfounderror", "importerror")):
         return "dependency_error"
 
@@ -71,7 +83,17 @@ def _has_error(output: str, run_command: str, returncode: int | None = None) -> 
         return False
 
     error_type = _classify_error(output)
-    return error_type != "none"
+    if error_type != "none":
+        return True
+
+    # Fail-safe: a nonzero/abnormal exit that didn't match any known error
+    # pattern is still a failure, not a success. Trusting "no keyword
+    # matched" as proof of a clean run is exactly how this system reported
+    # a build as "working, sir" while the process never actually ran.
+    if returncode not in (0, None):
+        return True
+
+    return False
 
 class RateLimitError(Exception):
     pass

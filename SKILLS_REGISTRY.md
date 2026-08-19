@@ -3,10 +3,12 @@
 <!-- .py file dalo, ya root mein nayi .md file banao — agli baar yahan khud register ho jayegi. -->
 
 # Jarvis Skill & Module Registry
-_Last built: 2026-08-19T22:28:06_
+_Last built: 2026-08-19T22:53:27_
 
 ## Action / Agent Modules
 
+- **actions/attention_monitor.py** — (no docstring yet — is file mein docstring add karo taake routing behtar ho)
+  - functions: speak_native, stop_native_speech, handle_call_action, read_event_preview
 - **actions/browser_control.py** — (no docstring yet — is file mein docstring add karo taake routing behtar ho)
   - functions: browser_control
 - **actions/claude_agent.py** *(TOOL_DECLARATIONS exposed)* — actions/claude_agent.py
@@ -21,6 +23,12 @@ _Last built: 2026-08-19T22:28:06_
   - functions: set_wallpaper, set_wallpaper_from_url, get_current_wallpaper, organize_desktop, list_desktop, clean_desktop, get_desktop_stats, desktop_control
 - **actions/dev_agent.py** — (no docstring yet — is file mein docstring add karo taake routing behtar ho)
   - functions: dev_agent
+- **actions/docx_tools.py** — JARVIS Word Document Tools
+  - functions: create_document, extract_text, add_table
+- **actions/error_handler.py** — JARVIS Error Handler
+  - functions: get_error_handler
+- **actions/executor.py** — JARVIS Executor
+  - functions: get_executor
 - **actions/facebook_poster.py** — Facebook Page posting with interactive workflow (text/photo/video).
   - functions: facebook_post
 - **actions/file_controller.py** — (no docstring yet — is file mein docstring add karo taake routing behtar ho)
@@ -33,8 +41,18 @@ _Last built: 2026-08-19T22:28:06_
   - functions: game_updater
 - **actions/gdrive_status_poster.py** *(TOOL_DECLARATIONS exposed)* — Google Drive → WhatsApp Status auto-poster.
   - functions: load_config, load_state, save_state, load_processed, mark_processed, is_processed, run_poll_cycle, start_watch, stop_watch, trigger_poll_now, get_watch_status, autostart_if_enabled
+- **actions/meeting_assistant.py** — JARVIS Meeting Assistant
+  - functions: get_meeting_assistant
+- **actions/office_builder.py** — JARVIS Office Builder
+  - functions: get_office_builder
 - **actions/open_app.py** — (no docstring yet — is file mein docstring add karo taake routing behtar ho)
   - functions: open_app
+- **actions/pdf_tools.py** — JARVIS PDF Tools
+  - functions: create_pdf_from_text, extract_text_from_pdf, merge_pdfs, split_pdf, add_watermark
+- **actions/planner.py** — JARVIS Planner
+  - functions: get_planner
+- **actions/ppt_template_workflow.py** — JARVIS PowerPoint Template Workflow
+  - functions: get_ppt_workflow
 - **actions/reminder.py** — (no docstring yet — is file mein docstring add karo taake routing behtar ho)
   - functions: reminder
 - **actions/screen_processor.py** — (no docstring yet — is file mein docstring add karo taake routing behtar ho)
@@ -43,6 +61,8 @@ _Last built: 2026-08-19T22:28:06_
   - functions: start_recording, stop_recording, get_recording_status
 - **actions/send_message.py** — (no docstring yet — is file mein docstring add karo taake routing behtar ho)
   - functions: send_message
+- **actions/task_queue.py** — JARVIS Task Queue
+  - functions: get_task_queue
 - **actions/viral_clipper.py** *(TOOL_DECLARATIONS exposed)* — actions/viral_clipper.py
   - functions: ensure_dependencies, is_url, download_video, get_local_video, probe_video, transcribe, call_ai, detect_viral_segments, cut_clip, process_video, jarvis_tool_cut_viral_clips, main
 - **actions/weather_report.py** — (no docstring yet — is file mein docstring add karo taake routing behtar ho)
@@ -79,6 +99,7 @@ _Last built: 2026-08-19T22:28:06_
 - **Modules.md** (31208 chars) — JARVIS — Modules Documentation
 - **PHASE1_MODULE_REGISTRY.md** (29485 chars) — Phase 1: Module Registry & Auto-Discovery Implementation
 - **QUICK_REFERENCE.md** (8437 chars) — Jarvis1 Refactoring Quick Reference
+- **RESTORE_GUIDE.md** (4038 chars) — JARVIS Files Restoration Guide
 - **Roadmap.md** (7 chars) — task
 - **Tasks.md** (24963 chars) — JARVIS — Tasks
 - **Viral Clip Extractor.md** (3568 chars) — title: Viral Clip Extractor project: jarvis module: actions/viral_clipper.py status: active type: feature-note created: 2026-07-25 tags: [jarvis, mark-xxxix-or, video, ai, automation, youtube]

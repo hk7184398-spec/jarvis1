@@ -75,31 +75,51 @@ class DashboardView(QWebEngineView):
         self._channel.registerObject("bridge", self._bridge)
         self.page().setWebChannel(self._channel)
 
+        # The HTML/JS (including jarvisUpdateMetrics/jarvisAppendLog/etc.)
+        # loads asynchronously. Calls made before loadFinished fires would
+        # hit "ReferenceError: jarvisX is not defined" — so we queue any
+        # push_* call made before the page is ready and flush it once it is.
+        self._ready = False
+        self._pending_js: list[str] = []
+        self.loadFinished.connect(self._on_load_finished)
+
         self.setHtml(_PAGE_HTML, baseUrl=QUrl("about:blank"))
 
         self._muted = False
 
+    def _on_load_finished(self, ok: bool):
+        self._ready = True
+        for js in self._pending_js:
+            self.page().runJavaScript(js)
+        self._pending_js.clear()
+
+    def _run_js(self, js: str):
+        if self._ready:
+            self.page().runJavaScript(js)
+        else:
+            self._pending_js.append(js)
+
     # -- push updates from MainWindow into the page -----------------
     def push_log(self, text: str):
-        self.page().runJavaScript(f"jarvisAppendLog({_esc_js(text)});")
+        self._run_js(f"jarvisAppendLog({_esc_js(text)});")
 
     def update_metrics(self, cpu: float, mem: float, net_str: str):
-        self.page().runJavaScript(
+        self._run_js(
             f"jarvisUpdateMetrics({cpu:.0f}, {mem:.0f}, {_esc_js(net_str)});"
         )
 
     def set_state(self, state: str):
-        self.page().runJavaScript(f"jarvisSetState({_esc_js(state)});")
+        self._run_js(f"jarvisSetState({_esc_js(state)});")
 
     def set_mic(self, active: bool):
         self._muted = not active
-        self.page().runJavaScript(f"jarvisSetMic({'true' if active else 'false'});")
+        self._run_js(f"jarvisSetMic({'true' if active else 'false'});")
 
     def set_daily_brief(self, text: str):
-        self.page().runJavaScript(f"jarvisSetBrief({_esc_js(text)});")
+        self._run_js(f"jarvisSetBrief({_esc_js(text)});")
 
     def set_dev_copilot(self, text: str):
-        self.page().runJavaScript(f"jarvisSetCopilot({_esc_js(text)});")
+        self._run_js(f"jarvisSetCopilot({_esc_js(text)});")
 
 
 # ----------------------------------------------------------------------
